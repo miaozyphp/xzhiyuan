@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090c0e">
+  <title>x纸鸢</title>
+  <link rel="icon" type="image/png" href="assets/x-zhiyuan-emblem.png">
+  <link rel="stylesheet" href="styles.css">
+  <script src="vendor/lucide.min.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell is-loading" id="app-shell">
+    <div class="studio-backdrop" aria-hidden="true">
+      <div class="studio-wallpaper"></div>
+      <video class="studio-video" id="studio-video" muted loop playsinline></video>
+      <div class="studio-backdrop-shade"></div>
+    </div>
+    <header class="topbar">
+      <div class="brand-lockup">
+        <span class="brand-mark"><img src="assets/x-zhiyuan-emblem.png" alt="X纸鸢徽标"></span>
+        <span class="brand-copy"><strong>x纸鸢</strong><small>Codex 主题工作台</small></span>
+      </div>
+
+      <div class="runtime-status" aria-live="polite">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">正在准备工作台</span>
+        <span class="status-version" id="codex-version"></span>
+      </div>
+
+      <nav class="command-bar" aria-label="主题操作">
+        <label class="auto-apply" title="直接打开 Codex 时自动载入默认主题">
+          <input id="auto-apply-toggle" type="checkbox">
+          <span class="toggle-track"><i></i></span>
+          <span>自动应用</span>
+        </label>
+        <button class="icon-button" id="refresh-button" type="button" title="刷新" aria-label="刷新">
+          <i data-lucide="refresh-cw"></i>
+        </button>
+        <button class="command-button secondary" id="save-copy-button" type="button" title="保留当前主题并创建一个独立主题">
+          <i data-lucide="copy-plus"></i><span>另存为</span>
+        </button>
+        <button class="command-button secondary" id="update-button" type="button" title="保存对当前自定义主题的修改" disabled>
+          <i data-lucide="save"></i><span>保存修改</span>
+        </button>
+        <button class="command-button secondary" id="launch-button" type="button">
+          <i data-lucide="play"></i><span>启动 Codex</span>
+        </button>
+        <button class="command-button primary" id="apply-button" type="button">
+          <i data-lucide="wand-sparkles"></i><span>应用皮肤</span>
+        </button>
+      </nav>
+    </header>
+
+    <main class="workbench">
+      <aside class="library-panel" id="library-drop-zone" aria-label="主题图库，可批量拖入图片或视频新建主题">
+        <div class="panel-heading">
+          <div><span class="eyebrow">LIBRARY</span><h2>主题图库</h2></div>
+          <span class="count-badge" id="theme-count">0</span>
+        </div>
+
+        <div class="library-quick-actions">
+        <button class="media-drop" id="quick-media-button" type="button" title="替换当前选中主题的背景媒体">
+          <span class="media-drop-icon media-drop-preview" id="quick-media-preview"><i data-lucide="image-plus"></i></span>
+          <span><strong>更换背景</strong><small id="quick-media-hint">当前主题</small></span>
+        </button>
+        <button class="media-drop new-theme-drop" id="new-theme-button" type="button" title="从当前主题新建，或把多个媒体文件拖入左栏批量创建">
+          <span class="media-drop-icon"><i data-lucide="plus"></i></span>
+          <span><strong>新建主题</strong><small>或批量拖入媒体</small></span>
+        </button>
+        </div>
+
+        <div class="library-tools">
+          <label class="search-box">
+            <i data-lucide="search"></i>
+            <input id="theme-search" type="search" placeholder="搜索主题" autocomplete="off">
+          </label>
+          <div class="filter-row" id="filter-row">
+            <button class="filter-button active" data-filter="all" type="button">全部</button>
+            <button class="filter-button" data-filter="light" type="button">亮色</button>
+            <button class="filter-button" data-filter="warm" type="button">暖色</button>
+            <button class="filter-button" data-filter="custom" type="button">我的</button>
+          </div>
+        </div>
+
+        <div class="theme-list" id="theme-list" aria-live="polite"></div>
+
+        <footer class="library-footer">
+          <span>LOCAL THEME ARCHIVE</span>
+          <span class="creator-credit">Created By 三微</span>
+        </footer>
+      </aside>
+
+      <section class="preview-panel" aria-label="实时预览">
+        <div class="preview-toolbar">
+          <div>
+            <span class="eyebrow">LIVE PREVIEW</span>
+            <h1 id="preview-title">Codex 界面预览</h1>
+          </div>
+          <div class="preview-view-tabs" role="tablist" aria-label="预览页面">
+            <button class="preview-tab active" role="tab" aria-selected="true" data-view="home" type="button"><i data-lucide="house"></i><span>主页</span></button>
+            <button class="preview-tab" role="tab" aria-selected="false" data-view="task" type="button"><i data-lucide="messages-square"></i><span>任务</span></button>
+            <button class="preview-tab" role="tab" aria-selected="false" data-view="settings" type="button"><i data-lucide="settings-2"></i><span>设置</span></button>
+          </div>
+          <div class="draft-indicator" id="draft-indicator"><i data-lucide="circle-check"></i><span>已同步</span></div>
+        </div>
+
+        <div class="preview-stage">
+          <div class="codex-preview" id="codex-preview">
+            <div class="preview-wallpaper" id="preview-wallpaper"></div>
+            <video class="preview-video" id="preview-video" muted loop playsinline></video>
+            <div class="preview-shade"></div>
+
+            <header class="mock-titlebar">
+              <span>CODEX</span>
+              <div><i data-lucide="minus"></i><i data-lucide="square"></i><i data-lucide="x"></i></div>
+            </header>
+
+            <aside class="mock-sidebar mapped-region" data-region="01">
+              <div class="mock-badge" id="mock-badge">
+                <span class="mock-badge-mark" id="mock-badge-mark"><img id="mock-badge-image" alt=""><b id="mock-badge-text">TS</b></span>
+                <div><b id="mock-badge-title">x纸鸢</b><small>当前主题</small></div>
+              </div>
+              <button class="mock-new-task" type="button"><i data-lucide="square-pen"></i><span>新建任务</span></button>
+              <nav class="mock-nav">
+                <span class="active"><i data-lucide="inbox"></i>任务</span>
+                <span><i data-lucide="folder"></i>项目</span>
+                <span><i data-lucide="blocks"></i>技能</span>
+              </nav>
+              <small class="mock-label">最近</small>
+              <span class="mock-history active">主题工作台重写</span>
+              <span class="mock-history">预览与应用</span>
+              <span class="mock-history">背景细节调整</span>
+            </aside>
+
+            <section class="mock-main mapped-region" data-region="02">
+              <header class="mock-main-header"><b id="mock-main-title">主页</b><span><i data-lucide="panel-right"></i><i data-lucide="more-horizontal"></i></span></header>
+
+              <div class="preview-view active" data-preview-view="home">
+                <div class="home-content">
+                  <div class="home-hero mapped-region" data-region="03">
+                    <small>x纸鸢</small>
+                    <h3 id="home-greeting">晚上好</h3>
+                    <p>今天想从哪里开始？</p>
+                  </div>
+                  <div class="mock-composer home-composer mapped-region" data-region="05">
+                    <span>向 Codex 发送消息</span>
+                    <div><i data-lucide="paperclip"></i><span class="mock-send"><i data-lucide="arrow-up"></i></span></div>
+                  </div>
+                  <div class="suggestion-grid mapped-region" data-region="04">
+                    <button type="button"><i data-lucide="sparkles"></i><span><b>继续最近任务</b><small>恢复工作上下文</small></span></button>
+                    <button type="button"><i data-lucide="folder-code"></i><span><b>打开项目</b><small>选择本地工作区</small></span></button>
+                    <button type="button"><i data-lucide="search-code"></i><span><b>检查代码</b><small>定位问题与风险</small></span></button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="preview-view" data-preview-view="task">
+                <div class="thread-content">
+                  <article class="assistant-message mapped-region" data-region="03"><span>C</span><div><b>Codex</b><p>主题结构已经整理完成。颜色和背景修改会立即反映在预览中。</p></div></article>
+                  <article class="user-message mapped-region" data-region="04">把输入框和侧栏再清楚一点。</article>
+                  <article class="assistant-message"><span>C</span><div><b>Codex</b><p>已提高文字对比度，并保留背景层次。</p></div></article>
+                </div>
+                <div class="mock-composer mapped-region" data-region="05"><span>向 Codex 发送消息</span><div><i data-lucide="paperclip"></i><span class="mock-send"><i data-lucide="arrow-up"></i></span></div></div>
+              </div>
+
+              <div class="preview-view" data-preview-view="settings">
+                <div class="settings-content">
+                  <h3>设置</h3>
+                  <div class="settings-row"><span><b>外观</b><small>界面与字体</small></span><i data-lucide="chevron-right"></i></div>
+                  <div class="settings-row"><span><b>通知</b><small>任务完成提醒</small></span><i data-lucide="chevron-right"></i></div>
+                  <div class="settings-row"><span><b>个性化</b><small>主题工作台</small></span><span class="settings-state">已启用</span></div>
+                </div>
+              </div>
+            </section>
+
+            <div class="mock-popover mapped-region" data-region="06"><i data-lucide="palette"></i><span><b>浮层与菜单</b><small>使用抬升表面颜色</small></span></div>
+          </div>
+
+          <div class="region-legend" aria-label="配置区域对应关系">
+            <button data-region-target="01" type="button"><b>01</b>侧栏</button>
+            <button data-region-target="02" type="button"><b>02</b>主内容</button>
+            <button data-region-target="03" type="button"><b>03</b>标题/消息</button>
+            <button data-region-target="04" type="button"><b>04</b>卡片/气泡</button>
+            <button data-region-target="05" type="button"><b>05</b>输入框</button>
+            <button data-region-target="06" type="button"><b>06</b>浮层</button>
+          </div>
+        </div>
+
+        <footer class="preview-footer">
+          <span><i data-lucide="monitor"></i>16:9 自适应预览</span>
+          <span id="preview-mode-label">标准模式</span>
+          <span id="preview-save-state">当前主题未修改</span>
+        </footer>
+      </section>
+
+      <aside class="inspector-panel" aria-label="皮肤配置">
+        <div class="inspector-header">
+          <div><span class="eyebrow">INSPECTOR</span><h2>皮肤配置</h2></div>
+          <button class="icon-button" id="reset-button" type="button" title="撤销未保存修改" aria-label="撤销未保存修改"><i data-lucide="undo-2"></i></button>
+        </div>
+
+        <label class="theme-name-field">
+          <span>主题名称</span>
+          <input id="theme-name" maxlength="80" autocomplete="off">
+        </label>
+
+        <div class="theme-save-rule" id="theme-save-rule">
+          <i data-lucide="lock-keyhole"></i><span>内置主题只读，修改后可另存为新主题</span>
+        </div>
+
+        <div class="mode-switch" role="radiogroup" aria-label="主题模式">
+          <button class="active" data-mode="standard" role="radio" aria-checked="true" type="button"><i data-lucide="shield-check"></i><span><b>标准模式</b><small>稳定外观</small></span></button>
+          <button data-mode="deep" role="radio" aria-checked="false" type="button"><i data-lucide="layers-3"></i><span><b>深度模式</b><small>首页构图</small></span></button>
+        </div>
+
+        <div class="inspector-tabs" role="tablist" aria-label="配置分类">
+          <button class="inspector-tab active" data-tab="appearance" role="tab" aria-selected="true" type="button"><i data-lucide="swatch-book"></i><span>配色</span></button>
+          <button class="inspector-tab" data-tab="components" role="tab" aria-selected="false" type="button"><i data-lucide="sliders-horizontal"></i><span>组件</span></button>
+          <button class="inspector-tab" data-tab="badge" role="tab" aria-selected="false" type="button"><i data-lucide="badge"></i><span>角标</span></button>
+          <button class="inspector-tab" data-tab="background" role="tab" aria-selected="false" type="button"><i data-lucide="image"></i><span>背景</span></button>
+        </div>
+
+        <div class="inspector-content" id="inspector-content"></div>
+
+        <div class="inspector-footer">
+          <div class="compatibility-line" id="compatibility-line"><i data-lucide="circle-check"></i><span>当前配置可用</span></div>
+          <button class="wide-apply" id="wide-apply-button" type="button"><i data-lucide="wand-sparkles"></i><span>应用到 Codex</span></button>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <dialog class="modal" id="save-dialog">
+    <form method="dialog" id="save-form">
+      <div class="modal-heading"><span><i data-lucide="copy-plus"></i></span><div><strong id="save-dialog-title">另存为新主题</strong><small id="save-dialog-subtitle">原主题保持不变</small></div></div>
+      <label><span>新主题名称</span><input id="copy-name" maxlength="80" required autocomplete="off"></label>
+      <div class="modal-actions"><button class="command-button secondary" id="cancel-save" type="button">取消</button><button class="command-button primary" id="save-submit-button" type="submit"><i data-lucide="copy-plus"></i><span>创建主题</span></button></div>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="delete-dialog">
+    <form method="dialog" id="delete-form">
+      <div class="modal-heading danger"><span><i data-lucide="trash-2"></i></span><div><strong>删除主题</strong><small>内置主题不会受影响</small></div></div>
+      <p>确定删除“<b id="delete-theme-name"></b>”吗？</p>
+      <div class="modal-actions"><button class="command-button secondary" id="cancel-delete" type="button">取消</button><button class="command-button danger" type="submit"><i data-lucide="trash-2"></i><span>删除</span></button></div>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="reconnect-dialog">
+    <form method="dialog" id="reconnect-form">
+      <div class="modal-heading"><span><i data-lucide="refresh-cw"></i></span><div><strong>重新连接 Codex</strong><small>应用当前皮肤需要重新打开一次</small></div></div>
+      <p>工作台会关闭当前 Codex 窗口并立即重新打开，然后自动应用当前主题。请先确认正在编辑的内容已经保存。</p>
+      <div class="modal-actions"><button class="command-button secondary" id="cancel-reconnect" type="button">暂不应用</button><button class="command-button primary" type="submit"><i data-lucide="play"></i><span>重新打开并应用</span></button></div>
+    </form>
+  </dialog>
+
+  <div class="busy-overlay" id="busy-overlay" hidden><span class="busy-mark"><img src="assets/x-zhiyuan-emblem.png" alt="X纸鸢徽标"></span><strong id="busy-label">正在处理</strong></div>
+  <div class="toast-region" id="toast-region" aria-live="polite"></div>
+</body>
+</html>

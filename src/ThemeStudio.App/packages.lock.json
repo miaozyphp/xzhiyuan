@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net8.0-windows10.0.19041": {
+      "Microsoft.Web.WebView2": {
+        "type": "Direct",
+        "requested": "[1.0.3650.58, )",
+        "resolved": "1.0.3650.58",
+        "contentHash": "BrfpVqOuWtW8yA/it365aB6K6H6EYCXjqJkX730UiO7weVsSYjUyKPFVY5WGa+IfRHqknh619uXHMYTOR4WFRw=="
+      },
+      "themestudio.core": {
+        "type": "Project"
+      }
+    },
+    "net8.0-windows10.0.19041/win-x64": {
+      "Microsoft.Web.WebView2": {
+        "type": "Direct",
+        "requested": "[1.0.3650.58, )",
+        "resolved": "1.0.3650.58",
+        "contentHash": "BrfpVqOuWtW8yA/it365aB6K6H6EYCXjqJkX730UiO7weVsSYjUyKPFVY5WGa+IfRHqknh619uXHMYTOR4WFRw=="
+      }
+    }
+  }
+}
