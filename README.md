@@ -1,18 +1,49 @@
 # x纸鸢
 
-x纸鸢是一款独立的 Windows Codex 主题工作台，提供图片与视频背景、配色与表面调整、标准/深度模式、主题预览、批量导入以及本地主题管理。
+[![Release](https://img.shields.io/github/v/release/miaozyphp/xzhiyuan?include_prereleases&label=preview)](https://github.com/miaozyphp/xzhiyuan/releases)
+[![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-357EC7)](https://github.com/miaozyphp/xzhiyuan/releases)
+[![License](https://img.shields.io/github/license/miaozyphp/xzhiyuan)](LICENSE)
 
-本项目是非官方社区项目，与 OpenAI 无隶属、合作或背书关系。Codex 和 OpenAI 是其各自权利人的商标。
+x纸鸢是一款独立的 Windows Codex 主题工作台。它把图片与视频背景、配色、透明表面、组件层、左上角角标和主题管理集中在一个可视化界面里，并在应用前提供首页、任务页与设置页预览。
 
-## 主要能力
+> 本项目是非官方社区项目，与 OpenAI 无隶属、合作或背书关系。Codex 和 OpenAI 是其各自权利人的商标。
 
-- 工作台优先启动，Codex 检测与主题扫描在后台完成。
-- 主题和媒体保存在本机，无需在线主题服务。
-- 标准模式调整背景、颜色和表面；深度模式可进一步调整首页组件与布局。
-- 图片和视频可拖入主题库批量创建自定义主题。
-- 主题应用失败时只卸下主题，不关闭 Codex。
-- 可选的自动应用代理支持从系统直接启动 Codex 后加载默认主题。
-- 不修改 Codex 安装包、`app.asar` 或 Windows 应用签名。
+## 立即体验
+
+**[下载 Windows 安装版 EXE](https://github.com/miaozyphp/xzhiyuan/releases/download/v0.1.13/XZhiYuan-Setup-0.1.13-win-x64.exe)**
+· [下载免安装便携包](https://github.com/miaozyphp/xzhiyuan/releases/download/v0.1.13/XZhiYuan-0.1.13-win-x64-portable.zip)
+· [查看全部版本](https://github.com/miaozyphp/xzhiyuan/releases)
+
+安装版适合直接下载体验；便携包解压后运行，适合不希望写入安装目录的用户。当前版本为未签名预览版，Windows 可能显示“未知发布者”或 SmartScreen 提示，请从本仓库下载并按 [校验说明](docs/verify-download.md) 核对 SHA-256。
+
+## 界面预览
+
+![x纸鸢工作台总览](docs/screenshots/workbench-overview.png)
+
+| 图片与视频背景配置 | 亮色主题与组件控制 |
+| --- | --- |
+| ![背景媒体配置](docs/screenshots/background-controls.png) | ![亮色主题组件配置](docs/screenshots/light-theme-components.png) |
+
+## 功能介绍
+
+| 功能 | 说明 |
+| --- | --- |
+| 图片与视频背景 | 支持图片、MP4/WebM/MOV 视频，提供可见度、模糊、填充方式和画面位置控制。 |
+| 标准与深度模式 | 标准模式侧重稳定的背景和配色；深度模式可进一步调整 Hero、建议卡片与首页构图。 |
+| 分层外观控制 | 背景、表面、组件、角标和深度布局可以分别启停，单层不兼容不会拖垮整个主题。 |
+| 可视化预览 | 无需先启动 Codex，即可切换首页、任务页和设置页检查文字、输入框、气泡与浮层效果。 |
+| 本地主题管理 | 支持新建、另存为、修改、复制、删除、默认主题以及自定义图片/视频分组。 |
+| 拖放与批量导入 | 将一个或多个图片、视频拖入左侧主题库，即可批量创建自定义主题。 |
+| 自动应用 | 可选后台代理让直接启动的 Codex 自动加载默认主题，也可随时关闭。 |
+| 安全回退 | 不修改 Codex 安装包或签名；应用失败时只卸下主题，不关闭 Codex。 |
+
+## 三步开始
+
+1. 下载并安装 x纸鸢，打开工作台。
+2. 选择内置主题，或把自己的图片、视频拖入左侧主题库。
+3. 在中间预览效果，调整右侧配置，点击“应用到 Codex”。
+
+主题和媒体只保存在本机，无需在线主题服务。工作台优先打开，Codex 检测、主题扫描和连接在后台完成。
 
 ## 工作原理与安全边界
 

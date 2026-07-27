@@ -94,17 +94,17 @@
       schemaVersion: 1, id: "rain-archive", name: "雨夜档案馆", description: "冷雨、黑石与温暖阅览灯。", version: "1.0.3", builtIn: true,
       mode: "deep", updatedAt: new Date().toISOString(),
       palette: { canvas: "#0B1013", surface: "#141B1F", elevated: "#1C272D", text: "#F1F4F3", mutedText: "#A7B2B6", border: "#334047", accent: "#35B8CE", accentText: "#061215", success: "#44B982", warning: "#D6A64B", danger: "#E66B62" },
-      media: { kind: "none", assetPath: null, opacity: .92, blur: 0, fit: "cover", position: "center", muted: true },
+      media: { kind: "image", assetPath: null, opacity: .92, blur: 0, fit: "cover", position: "center", muted: true },
       surfaces: { opacity: .22, blur: 6, radius: 6, sidebarOpacity: .18, composerOpacity: .72, bubbleOpacity: .82 },
       layers: { media: true, surfaces: true, components: true, badge: true, hero: true, suggestions: true, homeLayout: true },
       badge: { assetPath: "assets/built-in/theme-studio-emblem.png", text: "X", position: "top-left", style: "icon", size: 24, offsetX: 8, offsetY: 6, radius: 6, opacity: .95, backgroundOpacity: .82, borderOpacity: .35 }
     };
     const variants = [
       sample,
-      { ...clone(sample), id: "paper-sky", name: "纸上晴空", mode: "standard", palette: { ...sample.palette, canvas: "#EAF2F3", surface: "#F8FBFA", elevated: "#FFFFFF", text: "#142023", mutedText: "#66777C", border: "#C5D3D6", accent: "#168DA3", accentText: "#FFFFFF" } },
-      { ...clone(sample), id: "amber-library", name: "琥珀图书馆", palette: { ...sample.palette, canvas: "#17130E", surface: "#211A12", elevated: "#2A2117", text: "#F4EBDD", mutedText: "#BDAE99", border: "#493B2A", accent: "#D79A36", accentText: "#1B1207" } }
+      { ...clone(sample), id: "paper-sky", name: "纸上晴空", mode: "standard", media: { ...sample.media, kind: "none" }, palette: { ...sample.palette, canvas: "#EAF2F3", surface: "#F8FBFA", elevated: "#FFFFFF", text: "#142023", mutedText: "#66777C", border: "#C5D3D6", accent: "#168DA3", accentText: "#FFFFFF" } },
+      { ...clone(sample), id: "amber-library", name: "琥珀图书馆", media: { ...sample.media, kind: "none" }, palette: { ...sample.palette, canvas: "#17130E", surface: "#211A12", elevated: "#2A2117", text: "#F4EBDD", mutedText: "#BDAE99", border: "#493B2A", accent: "#D79A36", accentText: "#1B1207" } }
     ];
-    return { themes: variants.map(theme => ({ theme, mediaUrl: null, badgeUrl: "assets/x-zhiyuan-emblem.png" })), settings: { defaultThemeId: "rain-archive", brokerEnabled: false }, status: { state: "codexStopped", message: "Codex 已就绪", codexVersion: "26.721" } };
+    return { themes: variants.map(theme => ({ theme, mediaUrl: theme.id === "rain-archive" ? "../SeedAssets/rain-archive.png" : null, badgeUrl: "assets/x-zhiyuan-emblem.png" })), settings: { defaultThemeId: "rain-archive", brokerEnabled: false }, status: { state: "codexStopped", message: "Codex 已就绪", codexVersion: "26.721" } };
   }
 
   async function initialize() {
