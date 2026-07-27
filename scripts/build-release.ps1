@@ -171,6 +171,9 @@ New-Item -ItemType Directory -Force -Path $publishDir, $releaseDir | Out-Null
 & $DotNetPath restore (Join-Path $repoRoot 'ThemeStudio.sln') --locked-mode
 if ($LASTEXITCODE -ne 0) { throw 'dotnet restore failed.' }
 
+& $DotNetPath restore $appProjectPath --runtime win-x64 --locked-mode
+if ($LASTEXITCODE -ne 0) { throw 'dotnet win-x64 runtime restore failed.' }
+
 & $DotNetPath test (Join-Path $repoRoot 'ThemeStudio.sln') --no-restore --configuration Release --logger 'console;verbosity=minimal'
 if ($LASTEXITCODE -ne 0) { throw 'dotnet test failed.' }
 
