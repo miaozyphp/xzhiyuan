@@ -58,12 +58,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          $productName = 'x' + [char]0x7EB8 + [char]0x9E22
           $files = Get-ChildItem 'artifacts\release' -File | Select-Object -ExpandProperty FullName
           & gh release create $env:GITHUB_REF_NAME @files `
             --verify-tag `
             --prerelease `
             --notes-file 'docs\unsigned-release-notice.md' `
-            --title "x纸鸢 $env:GITHUB_REF_NAME 未签名预览版"
+            --title "$productName $env:GITHUB_REF_NAME unsigned preview"
           if ($LASTEXITCODE -ne 0) {
             throw 'GitHub release creation failed.'
           }
