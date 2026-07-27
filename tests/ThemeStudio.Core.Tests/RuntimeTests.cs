@@ -58,6 +58,13 @@ public sealed class RuntimeTests
         Assert.Contains("--ts-composer-opacity", compiled.Script);
         Assert.Contains("badge.dataset.style", compiled.Script);
         Assert.Contains("--ts-badge-background-opacity", compiled.Script);
+        Assert.Contains("data-theme-studio-tone", compiled.Script);
+        Assert.Contains("MutationObserver", compiled.Script);
+        Assert.Contains("refreshText", compiled.Script);
+        Assert.Contains("--color-text-primary", compiled.Script);
+        Assert.Contains("preservedTonePattern", compiled.Script);
+        Assert.Contains("textObserver.disconnect", compiled.Script);
+        Assert.Contains("removeAttribute('data-theme-studio-tone')", ThemeCompiler.CreateRemoveScript());
         Assert.DoesNotContain("button, [role='button'], input", compiled.Script);
         Assert.Equal("video/mp4", CdpAssetTransport.GetContentType("wallpaper.mp4"));
         Assert.Equal("image/png", CdpAssetTransport.GetContentType("badge.png"));

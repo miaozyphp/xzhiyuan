@@ -5,7 +5,7 @@ namespace ThemeStudio.Core.Runtime;
 
 public static class ThemeCompiler
 {
-    private const string RuntimeVersion = "1.0.3";
+    private const string RuntimeVersion = "1.0.4";
 
     public static CompiledTheme Compile(
         ThemeDefinition theme,
@@ -68,10 +68,12 @@ public static class ThemeCompiler
         """
         (() => {
           const ownedElements = [...document.querySelectorAll('[data-theme-studio-owned="true"]')];
-          const active = Boolean(window.__themeStudioRuntime || document.documentElement.dataset.themeStudio || ownedElements.length);
+          const tonedElements = [...document.querySelectorAll('[data-theme-studio-tone]')];
+          const active = Boolean(window.__themeStudioRuntime || document.documentElement.dataset.themeStudio || ownedElements.length || tonedElements.length);
           if (!active) return true;
           try { window.__themeStudioRuntime?.dispose?.(); } catch {}
           for (const element of ownedElements) element.remove();
+          for (const element of tonedElements) element.removeAttribute('data-theme-studio-tone');
           const root = document.documentElement;
           for (const key of [
             '--ts-canvas','--ts-surface','--ts-elevated','--ts-text','--ts-muted','--ts-border','--ts-accent',
@@ -81,7 +83,10 @@ public static class ThemeCompiler
             '--input','--ring','--destructive','--ts-media-opacity','--ts-media-blur','--ts-media-fit',
             '--ts-media-position','--ts-badge-size','--ts-badge-opacity','--ts-color-scheme','--ts-surface-opacity',
             '--ts-badge-radius','--ts-badge-background-opacity','--ts-badge-border-opacity','--ts-sidebar-opacity',
-            '--ts-composer-opacity','--ts-bubble-opacity','--ts-surface-blur','--ts-surface-radius'
+            '--ts-composer-opacity','--ts-bubble-opacity','--ts-surface-blur','--ts-surface-radius','--ts-text-shadow',
+            '--color-text-primary','--color-text-secondary','--color-text-tertiary','--text-primary','--text-secondary',
+            '--token-text-primary','--token-text-secondary','--token-text-tertiary','--sidebar-foreground',
+            '--sidebar-accent-foreground','--input-foreground'
           ]) root.style.removeProperty(key);
           delete root.dataset.themeStudio;
           delete root.dataset.themeStudioDeep;
@@ -111,7 +116,13 @@ public static class ThemeCompiler
             '--muted': p.elevated, '--muted-foreground': p.mutedText,
             '--accent': p.elevated, '--accent-foreground': p.text,
             '--border': p.border, '--input': p.border, '--ring': p.accent,
-            '--destructive': p.danger
+            '--destructive': p.danger,
+            '--color-text-primary': p.text, '--color-text-secondary': p.mutedText,
+            '--color-text-tertiary': p.mutedText, '--text-primary': p.text,
+            '--text-secondary': p.mutedText, '--token-text-primary': p.text,
+            '--token-text-secondary': p.mutedText, '--token-text-tertiary': p.mutedText,
+            '--sidebar-foreground': p.text, '--sidebar-accent-foreground': p.text,
+            '--input-foreground': p.text
           };
           for (const [key, value] of Object.entries(properties)) root.style.setProperty(key, value);
           root.dataset.themeStudio = config.themeId;
@@ -120,6 +131,10 @@ public static class ThemeCompiler
             :root[data-theme-studio] { color-scheme: var(--ts-color-scheme); }
             :root[data-theme-studio], :root[data-theme-studio] body { color: var(--ts-text) !important; background-color: var(--ts-canvas) !important; }
             :root[data-theme-studio] body { position: relative; }
+            :root[data-theme-studio] [data-theme-studio-tone='primary'] { color: var(--ts-text) !important; text-shadow: var(--ts-text-shadow); }
+            :root[data-theme-studio] [data-theme-studio-tone='muted'] { color: var(--ts-muted) !important; text-shadow: var(--ts-text-shadow); }
+            :root[data-theme-studio] [data-theme-studio-tone='inverse'] { color: var(--ts-accent-text) !important; text-shadow: none; }
+            :root[data-theme-studio] :where(input, textarea, [contenteditable='true'])::placeholder { color: var(--ts-muted) !important; opacity: 1; }
             #theme-studio-media { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; background: var(--ts-canvas); }
             #theme-studio-media::after { content: ''; position: absolute; inset: 0; background: color-mix(in srgb, var(--ts-canvas) 8%, transparent); }
             #theme-studio-media > img, #theme-studio-media > video { width: 100%; height: 100%; object-fit: var(--ts-media-fit); object-position: var(--ts-media-position); opacity: var(--ts-media-opacity); filter: blur(var(--ts-media-blur)); transform: scale(1.02); }
@@ -164,8 +179,130 @@ public static class ThemeCompiler
           root.style.setProperty('--ts-bubble-opacity', String(config.surfaces.bubbleOpacity));
           root.style.setProperty('--ts-surface-blur', `${config.surfaces.blur}px`);
           root.style.setProperty('--ts-surface-radius', `${config.surfaces.radius}px`);
+          root.style.setProperty('--ts-text-shadow', config.scheme === 'dark'
+            ? '0 1px 2px rgb(0 0 0 / 82%), 0 0 9px rgb(0 0 0 / 34%)'
+            : '0 1px 2px rgb(255 255 255 / 92%), 0 0 8px rgb(255 255 255 / 48%)');
           if (config.layers.surfaces) root.dataset.themeStudioSurfaces = 'true';
           if (config.mode === 'deep' && (config.layers.hero || config.layers.suggestions || config.layers.homeLayout)) root.dataset.themeStudioDeep = 'true';
+
+          const toneAttribute = 'data-theme-studio-tone';
+          const textControlSelector = "input, textarea, select, [contenteditable='true']";
+          const ignoredTextSelector = "#theme-studio-media, #theme-studio-badge, [data-theme-studio-owned='true'], script, style, noscript, svg, canvas, pre, code, kbd, samp, .monaco-editor, .cm-editor, [class*='syntax'], [class*='terminal']";
+          const preservedTonePattern = /(?:^|[\s:_-])(?:success|warning|danger|destructive|error)(?:$|[\s:_-])|text-(?:red|green|emerald|yellow|amber|orange|blue|cyan|teal|violet|purple|pink|rose)-/i;
+          const mutedTonePattern = /muted|secondary|tertiary|subtle|description|caption|placeholder|timestamp|metadata|hint|disabled/i;
+          const themeText = parseColor(p.text);
+          const accentText = parseColor(p.accentText);
+
+          function parseColor(value) {
+            if (!value) return null;
+            const hex = value.match(/^#([0-9a-f]{6})([0-9a-f]{2})?$/i);
+            if (hex) {
+              const packed = Number.parseInt(hex[1], 16);
+              return { r: (packed >> 16) & 255, g: (packed >> 8) & 255, b: packed & 255, a: hex[2] ? Number.parseInt(hex[2], 16) / 255 : 1 };
+            }
+            const rgb = value.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,\/]\s*([\d.]+)(%)?)?\s*\)$/i);
+            if (rgb) return { r: Number(rgb[1]), g: Number(rgb[2]), b: Number(rgb[3]), a: rgb[4] === undefined ? 1 : Number(rgb[4]) / (rgb[5] ? 100 : 1) };
+            const srgb = value.match(/^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)$/i);
+            return srgb ? { r: Number(srgb[1]) * 255, g: Number(srgb[2]) * 255, b: Number(srgb[3]) * 255, a: srgb[4] === undefined ? 1 : Number(srgb[4]) } : null;
+          }
+
+          function luminance(color) {
+            const channel = value => { value /= 255; return value <= .03928 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4; };
+            return .2126 * channel(color.r) + .7152 * channel(color.g) + .0722 * channel(color.b);
+          }
+
+          function contrast(left, right) {
+            if (!left || !right) return 0;
+            const high = Math.max(luminance(left), luminance(right));
+            const low = Math.min(luminance(left), luminance(right));
+            return (high + .05) / (low + .05);
+          }
+
+          function nearestBackground(element) {
+            for (let current = element; current; current = current.parentElement) {
+              const color = parseColor(getComputedStyle(current).backgroundColor);
+              if (color?.a >= .58) return color;
+            }
+            return parseColor(p.canvas);
+          }
+
+          function signature(element) {
+            return [element.getAttribute('class'), element.getAttribute('data-slot'), element.getAttribute('data-testid'), element.getAttribute('data-variant'), element.getAttribute('role')].filter(Boolean).join(' ');
+          }
+
+          function hasPatternInAncestors(element, pattern, depth = 3) {
+            for (let current = element, level = 0; current && level < depth; current = current.parentElement, level++) {
+              if (pattern.test(signature(current))) return true;
+            }
+            return false;
+          }
+
+          function hasOwnText(element) {
+            if (element.matches(textControlSelector)) return true;
+            return [...element.childNodes].some(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+          }
+
+          function classifyText(element) {
+            if (!(element instanceof HTMLElement)) return;
+            if (element.matches(ignoredTextSelector) || element.closest(ignoredTextSelector)) {
+              element.removeAttribute(toneAttribute);
+              return;
+            }
+            if (!hasOwnText(element)) {
+              element.removeAttribute(toneAttribute);
+              return;
+            }
+            if (element.closest("[role='alert'], [aria-invalid='true'], [data-theme-studio-preserve-color='true']") || hasPatternInAncestors(element, preservedTonePattern)) {
+              element.removeAttribute(toneAttribute);
+              return;
+            }
+
+            const muted = hasPatternInAncestors(element, mutedTonePattern) || Number.parseFloat(getComputedStyle(element).opacity) < .8;
+            const background = nearestBackground(element);
+            const primaryContrast = contrast(themeText, background);
+            const inverseContrast = contrast(accentText, background);
+            const tone = !muted && primaryContrast < 3 && inverseContrast >= primaryContrast + 1.25 ? 'inverse' : muted ? 'muted' : 'primary';
+            element.setAttribute(toneAttribute, tone);
+          }
+
+          function scanText(rootNode) {
+            if (!(rootNode instanceof Element)) return;
+            classifyText(rootNode);
+            for (const element of rootNode.querySelectorAll('*')) classifyText(element);
+          }
+
+          let scanFrame = 0;
+          const pendingTextRoots = new Set();
+          function queueTextScan(node) {
+            const element = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+            if (element) {
+              for (const pendingRoot of pendingTextRoots) {
+                if (pendingRoot.contains(element)) return;
+                if (element.contains(pendingRoot)) pendingTextRoots.delete(pendingRoot);
+              }
+              pendingTextRoots.add(element);
+            }
+            if (scanFrame) return;
+            scanFrame = requestAnimationFrame(() => {
+              scanFrame = 0;
+              const roots = [...pendingTextRoots];
+              pendingTextRoots.clear();
+              for (const pendingRoot of roots) scanText(pendingRoot);
+            });
+          }
+
+          const textObserver = new MutationObserver(mutations => {
+            for (const mutation of mutations) {
+              if (mutation.type === 'characterData') queueTextScan(mutation.target);
+              else {
+                const changedElement = mutation.target?.nodeType === Node.ELEMENT_NODE ? mutation.target : mutation.target?.parentElement;
+                if (changedElement) classifyText(changedElement);
+                for (const node of mutation.addedNodes) queueTextScan(node);
+              }
+            }
+          });
+          scanText(document.body);
+          textObserver.observe(document.body, { subtree: true, childList: true, characterData: true });
 
           if (config.layers.media && config.media.url && config.media.kind !== 'none') {
             const mediaRoot = add(document.createElement('div'));
@@ -191,16 +328,19 @@ public static class ThemeCompiler
           }
 
           const dispose = () => {
+            textObserver.disconnect();
+            if (scanFrame) cancelAnimationFrame(scanFrame);
+            for (const element of document.querySelectorAll(`[${toneAttribute}]`)) element.removeAttribute(toneAttribute);
             for (const element of document.querySelectorAll('[data-theme-studio-owned="true"]')) element.remove();
             for (const url of config.objectUrls || []) { try { URL.revokeObjectURL(url); } catch {} }
             for (const key of Object.keys(properties)) root.style.removeProperty(key);
-            for (const key of ['--ts-media-opacity','--ts-media-blur','--ts-media-fit','--ts-media-position','--ts-badge-size','--ts-badge-opacity','--ts-badge-radius','--ts-badge-background-opacity','--ts-badge-border-opacity','--ts-color-scheme','--ts-surface-opacity','--ts-sidebar-opacity','--ts-composer-opacity','--ts-bubble-opacity','--ts-surface-blur','--ts-surface-radius']) root.style.removeProperty(key);
+            for (const key of ['--ts-media-opacity','--ts-media-blur','--ts-media-fit','--ts-media-position','--ts-badge-size','--ts-badge-opacity','--ts-badge-radius','--ts-badge-background-opacity','--ts-badge-border-opacity','--ts-color-scheme','--ts-surface-opacity','--ts-sidebar-opacity','--ts-composer-opacity','--ts-bubble-opacity','--ts-surface-blur','--ts-surface-radius','--ts-text-shadow']) root.style.removeProperty(key);
             delete root.dataset.themeStudio;
             delete root.dataset.themeStudioDeep;
             delete root.dataset.themeStudioSurfaces;
             delete window.__themeStudioRuntime;
           };
-          window.__themeStudioRuntime = { version: config.version, themeId: config.themeId, dispose };
+          window.__themeStudioRuntime = { version: config.version, themeId: config.themeId, dispose, refreshText: () => scanText(document.body) };
           return JSON.stringify({ ok: true, themeId: config.themeId });
         })()
         """;

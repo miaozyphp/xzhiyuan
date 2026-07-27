@@ -2,6 +2,13 @@
 
 All notable changes to x纸鸢 are documented here.
 
+## 0.1.14 - 2026-07-27
+
+- Fixed Codex updates and light native color schemes forcing black text over dark image and video themes.
+- Applied configurable primary and secondary text colors to dynamically rendered navigation, cards, dialogs, menus, and composer content.
+- Preserved syntax highlighting and semantic status colors while adding automatic inverse text on opaque high-contrast surfaces.
+- Added complete runtime cleanup and live DOM observation so theme changes remain effective after navigation without restarting Codex.
+
 ## 0.1.13 - 2026-07-27
 
 - Unified public branding and source asset names under x纸鸢 while retaining legacy internal identifiers for upgrade compatibility.
