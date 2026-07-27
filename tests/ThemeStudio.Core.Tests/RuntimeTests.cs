@@ -71,6 +71,7 @@ public sealed class RuntimeTests
         Assert.Contains("--ts-readable-muted", compiled.Script);
         Assert.Contains("body > #root", compiled.Script);
         Assert.DoesNotContain("body > :not(#theme-studio-media)", compiled.Script);
+        Assert.Contains("theme-studio-window-controls-backdrop", compiled.Script);
         Assert.Contains("textObserver.disconnect", compiled.Script);
         Assert.Contains("removeAttribute('data-theme-studio-tone')", ThemeCompiler.CreateRemoveScript());
         Assert.DoesNotContain("button, [role='button'], input", compiled.Script);
@@ -93,6 +94,9 @@ public sealed class RuntimeTests
     public void ManagedRestartNeverKillsAProcessTree()
     {
         Assert.False(CodexLauncher.KillEntireProcessTree);
+        Assert.Equal(0, new CodexWindowChrome().Apply([], true));
+        Assert.True(ThemeCompiler.UsesLightColorScheme("#FFFFFF"));
+        Assert.False(ThemeCompiler.UsesLightColorScheme("#101820"));
     }
 
     [Fact]

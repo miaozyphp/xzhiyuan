@@ -5,7 +5,7 @@ namespace ThemeStudio.Core.Runtime;
 
 public static class ThemeCompiler
 {
-    private const string RuntimeVersion = "1.0.5";
+    private const string RuntimeVersion = "1.0.6";
 
     public static CompiledTheme Compile(
         ThemeDefinition theme,
@@ -21,7 +21,7 @@ public static class ThemeCompiler
             themeId = theme.Id,
             objectUrls = objectUrls ?? [],
             mode = theme.Mode.ToString().ToLowerInvariant(),
-            scheme = IsLight(theme.Palette.Canvas) ? "light" : "dark",
+            scheme = UsesLightColorScheme(theme.Palette.Canvas) ? "light" : "dark",
             palette = theme.Palette,
             surfaces = theme.Surfaces,
             media = new
@@ -149,6 +149,7 @@ public static class ThemeCompiler
             #theme-studio-media { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; background: var(--ts-canvas); }
             #theme-studio-media::after { content: ''; position: absolute; inset: 0; background: color-mix(in srgb, var(--ts-canvas) 14%, transparent); }
             #theme-studio-media > img, #theme-studio-media > video { width: 100%; height: 100%; object-fit: var(--ts-media-fit); object-position: var(--ts-media-position); opacity: var(--ts-media-opacity); filter: blur(var(--ts-media-blur)); transform: scale(1.02); }
+            #theme-studio-window-controls-backdrop { position: fixed; top: 0; right: 0; z-index: 2147482900; width: 144px; height: 32px; pointer-events: none; background: color-mix(in srgb, var(--ts-canvas) 90%, rgb(118 122 126 / 88%)); border-left: 1px solid color-mix(in srgb, var(--ts-text) 20%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--ts-text) 20%, transparent); border-radius: 0 0 0 6px; backdrop-filter: blur(12px); }
             :root[data-theme-studio] body > #root { position: relative; z-index: 1; }
             :root[data-theme-studio-surfaces='true'] aside.app-shell-left-panel { background-color: color-mix(in srgb, var(--ts-surface) calc(var(--ts-sidebar-opacity) * 100%), transparent) !important; backdrop-filter: none !important; }
             :root[data-theme-studio-surfaces='true'] main.main-surface { background-color: color-mix(in srgb, var(--ts-surface) calc(var(--ts-surface-opacity) * 100%), transparent) !important; backdrop-filter: none !important; }
@@ -387,6 +388,11 @@ public static class ThemeCompiler
             attributeFilter: ['class', 'data-placeholder', 'aria-placeholder', 'aria-label', 'role', 'disabled', 'aria-disabled']
           });
 
+          const windowControlsBackdrop = add(document.createElement('div'));
+          windowControlsBackdrop.id = 'theme-studio-window-controls-backdrop';
+          windowControlsBackdrop.setAttribute('aria-hidden', 'true');
+          document.body.append(windowControlsBackdrop);
+
           if (config.layers.media && config.media.url && config.media.kind !== 'none') {
             const mediaRoot = add(document.createElement('div'));
             mediaRoot.id = 'theme-studio-media';
@@ -428,7 +434,7 @@ public static class ThemeCompiler
         })()
         """;
 
-    private static bool IsLight(string color)
+    public static bool UsesLightColorScheme(string color)
     {
         if (color.Length < 7 || !int.TryParse(color.AsSpan(1, 6), System.Globalization.NumberStyles.HexNumber, null, out var rgb))
             return false;

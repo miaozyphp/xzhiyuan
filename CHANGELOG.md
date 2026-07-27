@@ -2,6 +2,12 @@
 
 All notable changes to x纸鸢 are documented here.
 
+## 0.1.16 - 2026-07-27
+
+- Synchronized the native Windows title-bar symbol color with each theme's light or dark canvas.
+- Added a non-interactive, theme-matched contrast backdrop beneath the minimize, maximize, and close controls.
+- Restored the original DWM title-bar mode when a theme is removed during the same workbench session.
+
 ## 0.1.15 - 2026-07-27
 
 - Added background-aware text colors for light popovers and stronger outlines over bright image and video regions.

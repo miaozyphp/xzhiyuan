@@ -13,6 +13,7 @@ public sealed class StudioRuntime : IAsyncDisposable
     private readonly CodexLauncher _launcher = new();
     private readonly CdpEndpointDiscovery _discovery = new();
     private readonly CdpThemeApplicator _applicator;
+    private readonly CodexWindowChrome _windowChrome = new();
     private readonly SemaphoreSlim _operations = new(1, 1);
     private LoopbackAssetServer? _assets;
 
@@ -126,6 +127,13 @@ public sealed class StudioRuntime : IAsyncDisposable
                 TimeSpan.FromSeconds(20),
                 cancellationToken);
 
+            if (result.Success)
+            {
+                var darkWindowChrome = !ThemeCompiler.UsesLightColorScheme(theme.Palette.Canvas);
+                var chromeWindows = _windowChrome.Apply(_launcher.FindRunning(installation), darkWindowChrome);
+                _log.Info($"Codex window controls updated: dark={darkWindowChrome}; windows={chromeWindows}.");
+            }
+
             Update(result.Success
                 ? new RuntimeStatus(RuntimeState.Applied, result.Message, installation.Version, theme.Id)
                 : new RuntimeStatus(RuntimeState.NativeOnly, result.Message, installation.Version));
@@ -162,6 +170,9 @@ public sealed class StudioRuntime : IAsyncDisposable
     {
         var settings = await _repository.GetSettingsAsync(cancellationToken);
         await _applicator.RemoveAsync(settings.DebugPort, cancellationToken);
+        var installation = _locator.Locate();
+        if (installation is not null)
+            _windowChrome.Restore(_launcher.FindRunning(installation));
         Update(new RuntimeStatus(RuntimeState.Idle, "皮肤已卸下，Codex 保持运行"));
     }
 
