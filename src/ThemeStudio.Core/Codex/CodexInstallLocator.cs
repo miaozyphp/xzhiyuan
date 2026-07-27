@@ -35,7 +35,7 @@ public sealed class CodexInstallLocator
         return candidates.OrderByDescending(item => ParseVersion(item.Version)).FirstOrDefault();
     }
 
-    private static CodexInstallation? TryReadManifest(string packageName, string? root)
+    internal static CodexInstallation? TryReadManifest(string packageName, string? root)
     {
         if (string.IsNullOrWhiteSpace(root))
             return null;
