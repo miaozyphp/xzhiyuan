@@ -1,5 +1,6 @@
 using ThemeStudio.App.Services;
 using ThemeStudio.Core.Storage;
+using ThemeStudio.Core.Updates;
 
 namespace ThemeStudio.App;
 
@@ -28,6 +29,7 @@ internal static class Program
             var runtime = new StudioRuntime(repository, log);
             runtime.Start();
             log.Info("Theme runtime ready.");
+            var updates = new ReleaseUpdateService(Path.Combine(root, "updates"));
 
             if (args.Any(arg => string.Equals(arg, "--apply-once", StringComparison.OrdinalIgnoreCase)))
             {
@@ -56,9 +58,9 @@ internal static class Program
                 return;
             }
 
-            var controller = new AppController(repository, runtime);
+            var controller = new AppController(repository, runtime, updates);
             log.Info("Creating workbench window.");
-            using var window = new MainWindow(controller, runtime, repository, log);
+            using var window = new MainWindow(controller, runtime, repository, updates, log);
             log.Info("Workbench window created.");
             Application.Run(window);
             runtime.DisposeAsync().AsTask().GetAwaiter().GetResult();

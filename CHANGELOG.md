@@ -2,6 +2,13 @@
 
 All notable changes to x纸鸢 are documented here.
 
+## 0.1.17 - 2026-07-27
+
+- Replaced the title-bar styling workaround with a simple neutral contrast backdrop verified against a real Codex window capture.
+- Added background GitHub Releases checks and an in-app version management dialog.
+- Added verified update downloads with progress, strict package naming, trusted release URLs, and SHA-256 enforcement before installation.
+- Added silent update handoff that closes the workbench during installation and reopens it after a successful upgrade.
+
 ## 0.1.16 - 2026-07-27
 
 - Synchronized the native Windows title-bar symbol color with each theme's light or dark canvas.

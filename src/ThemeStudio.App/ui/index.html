@@ -27,6 +27,7 @@
         <span class="status-dot" id="status-dot"></span>
         <span id="status-text">正在准备工作台</span>
         <span class="status-version" id="codex-version"></span>
+        <button class="update-chip" id="update-chip" type="button" hidden><i data-lucide="download"></i><span>发现新版本</span></button>
       </div>
 
       <nav class="command-bar" aria-label="主题操作">
@@ -87,7 +88,7 @@
         <div class="theme-list" id="theme-list" aria-live="polite"></div>
 
         <footer class="library-footer">
-          <span>LOCAL THEME ARCHIVE</span>
+          <button class="version-button" id="version-button" type="button" title="检查 x纸鸢 更新"><i data-lucide="package-check"></i><span id="app-version">x纸鸢 v--</span></button>
           <span class="creator-credit">Created By 三微</span>
         </footer>
       </aside>
@@ -254,6 +255,17 @@
       <p>工作台会关闭当前 Codex 窗口并立即重新打开，然后自动应用当前主题。请先确认正在编辑的内容已经保存。</p>
       <div class="modal-actions"><button class="command-button secondary" id="cancel-reconnect" type="button">暂不应用</button><button class="command-button primary" type="submit"><i data-lucide="play"></i><span>重新打开并应用</span></button></div>
     </form>
+  </dialog>
+
+  <dialog class="modal update-dialog" id="update-dialog">
+    <div class="update-dialog-content">
+      <div class="modal-heading"><span><i data-lucide="package-check"></i></span><div><strong id="update-dialog-title">版本与更新</strong><small id="update-dialog-subtitle">通过 GitHub Releases 获取</small></div></div>
+      <div class="update-version-line"><span><small>当前版本</small><b id="update-current-version">v--</b></span><i data-lucide="arrow-right"></i><span><small>最新版本</small><b id="update-latest-version">检查中</b></span></div>
+      <p class="update-message" id="update-message">正在读取版本信息。</p>
+      <div class="update-progress" id="update-progress" hidden><div><span id="update-progress-label">正在下载</span><b id="update-progress-value">0%</b></div><progress id="update-progress-bar" max="100" value="0"></progress></div>
+      <a class="release-link" id="release-link" href="https://github.com/miaozyphp/xzhiyuan/releases" target="_blank" rel="noreferrer"><i data-lucide="external-link"></i><span>查看发布说明</span></a>
+      <div class="modal-actions"><button class="command-button secondary" id="cancel-update" type="button">稍后</button><button class="command-button primary" id="update-action-button" type="button"><i data-lucide="refresh-cw"></i><span>检查更新</span></button></div>
+    </div>
   </dialog>
 
   <div class="busy-overlay" id="busy-overlay" hidden><span class="busy-mark"><img src="assets/x-zhiyuan-emblem.png" alt="X纸鸢徽标"></span><strong id="busy-label">正在处理</strong></div>

@@ -1,17 +1,22 @@
 using System.Text.Json;
 using ThemeStudio.Core.Models;
 using ThemeStudio.Core.Storage;
+using ThemeStudio.Core.Updates;
 
 namespace ThemeStudio.App.Services;
 
-public sealed class AppController(ThemeRepository repository, StudioRuntime runtime)
+public sealed class AppController(ThemeRepository repository, StudioRuntime runtime, ReleaseUpdateService updates)
 {
     private readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true
     };
 
-    public async Task<object?> HandleAsync(string method, JsonElement parameters, CancellationToken cancellationToken = default) => method switch
+    public async Task<object?> HandleAsync(
+        string method,
+        JsonElement parameters,
+        IProgress<AppUpdateProgress>? updateProgress = null,
+        CancellationToken cancellationToken = default) => method switch
     {
         "bootstrap" => await CreateBootstrapAsync(cancellationToken),
         "refresh" => await CreateBootstrapAsync(cancellationToken),
@@ -26,6 +31,8 @@ public sealed class AppController(ThemeRepository repository, StudioRuntime runt
         "restartAndApply" => await RestartAndApplyAsync(parameters, cancellationToken),
         "launchCodex" => await runtime.ApplyDefaultAsync(cancellationToken),
         "removeTheme" => RemoveThemeAsync(cancellationToken),
+        "checkUpdate" => await updates.CheckAsync(cancellationToken),
+        "downloadUpdate" => await updates.DownloadAsync(updateProgress, cancellationToken),
         _ => throw new InvalidOperationException("不支持的工作台操作。")
     };
 
@@ -49,7 +56,8 @@ public sealed class AppController(ThemeRepository repository, StudioRuntime runt
                 badgeUrl = runtime.GetAssetUrl(theme.Badge.AssetPath)
             }),
             settings,
-            status = runtime.Status
+            status = runtime.Status,
+            update = updates.Status
         };
     }
 

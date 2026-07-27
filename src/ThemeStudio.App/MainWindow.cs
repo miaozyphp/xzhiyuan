@@ -6,6 +6,7 @@ using Microsoft.Web.WebView2.WinForms;
 using ThemeStudio.App.Services;
 using ThemeStudio.Core.Models;
 using ThemeStudio.Core.Storage;
+using ThemeStudio.Core.Updates;
 
 namespace ThemeStudio.App;
 
@@ -14,17 +15,19 @@ public sealed class MainWindow : Form
     private readonly AppController _controller;
     private readonly StudioRuntime _runtime;
     private readonly ThemeRepository _repository;
+    private readonly ReleaseUpdateService _updates;
     private readonly LocalLog _log;
     private readonly WebView2 _webView;
     private readonly NotifyIcon _tray;
     private bool _webReady;
     private bool _exitRequested;
 
-    public MainWindow(AppController controller, StudioRuntime runtime, ThemeRepository repository, LocalLog log)
+    public MainWindow(AppController controller, StudioRuntime runtime, ThemeRepository repository, ReleaseUpdateService updates, LocalLog log)
     {
         _controller = controller;
         _runtime = runtime;
         _repository = repository;
+        _updates = updates;
         _log = log;
         _log.Info("Main window constructor begin.");
         Text = "x纸鸢";
@@ -129,9 +132,23 @@ public sealed class MainWindow : Form
                 var source = PickAsset(method == "pickBadge");
                 result = source is null ? new { cancelled = true } : await _controller.ImportAssetAsync(themeId, source);
             }
+            else if (method == "installUpdate")
+            {
+                var installer = await _updates.GetVerifiedInstallerAsync();
+                var installerProcess = _updates.LaunchInstaller(installer);
+                result = new { started = true, processId = installerProcess.Id };
+                PostResponse(id, true, result, null);
+                _log.Info($"Update installer started: process={installerProcess.Id}.");
+                _exitRequested = true;
+                BeginInvoke(Close);
+                return;
+            }
             else
             {
-                result = await _controller.HandleAsync(method, parameters);
+                var progress = method == "downloadUpdate"
+                    ? new Progress<AppUpdateProgress>(value => PostEvent("updateProgress", value))
+                    : null;
+                result = await _controller.HandleAsync(method, parameters, progress);
             }
 
             PostResponse(id, true, result, null);

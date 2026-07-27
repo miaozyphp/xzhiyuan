@@ -53,6 +53,7 @@ Name: "{autodesktop}\x纸鸢"; Filename: "{app}\ThemeStudioForCodex.exe"; Workin
 [Run]
 Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "正在准备界面运行组件..."; Flags: waituntilterminated; Check: NeedsWebView2Runtime
 Filename: "{app}\ThemeStudioForCodex.exe"; Description: "打开 x纸鸢"; Flags: nowait postinstall skipifsilent runasoriginaluser
+Filename: "{app}\ThemeStudioForCodex.exe"; Flags: nowait runasoriginaluser; Check: WizardSilent
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\WebView2"

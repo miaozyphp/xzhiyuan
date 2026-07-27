@@ -12,6 +12,7 @@
     themes: [],
     settings: {},
     status: {},
+    update: { state: "idle", currentVersion: "0.0.0", progress: 0 },
     selectedId: null,
     original: null,
     draft: null,
@@ -41,7 +42,7 @@
         if (!waiting) return;
         pending.delete(id);
         waiting.reject(new Error("操作等待时间过长，请重试。"));
-      }, method === "applyTheme" || method === "restartAndApply" ? 120000 : 30000);
+      }, method === "downloadUpdate" ? 900000 : method === "applyTheme" || method === "restartAndApply" ? 120000 : 30000);
     });
   }
 
@@ -51,6 +52,11 @@
       if (message?.event === "runtimeStatus") {
         state.status = message.data;
         renderStatus();
+        return;
+      }
+      if (message?.event === "updateProgress") {
+        state.update = { ...state.update, state: "downloading", progress: message.data?.percent ?? 0 };
+        renderUpdateStatus();
         return;
       }
       const waiting = pending.get(message?.id);
@@ -65,6 +71,9 @@
     if (method !== "bootstrap" && method !== "refresh") {
       await new Promise(resolve => setTimeout(resolve, 220));
       if (method === "applyTheme" || method === "launchCodex") return { success: true, message: "预览模式：皮肤已准备。", suspendedLayers: [] };
+      if (method === "checkUpdate") return { state: "available", currentVersion: "0.1.17", latestVersion: "0.1.18", updateAvailable: true, readyToInstall: false, progress: 0, message: "发现新版本 0.1.18", releaseUrl: "https://github.com/miaozyphp/xzhiyuan/releases/tag/v0.1.18" };
+      if (method === "downloadUpdate") return { ...state.update, state: "ready", readyToInstall: true, progress: 100, message: "更新已下载并通过校验" };
+      if (method === "installUpdate") return { started: true };
       if (method === "pickMedia" || method === "pickBadge") return { cancelled: true };
       if (method === "createThemeCopy") {
         const theme = { ...clone(params.theme), id: `custom-${Date.now().toString(36)}`, name: params.name, builtIn: false, updatedAt: new Date().toISOString() };
@@ -104,7 +113,7 @@
       { ...clone(sample), id: "paper-sky", name: "纸上晴空", mode: "standard", media: { ...sample.media, kind: "none" }, palette: { ...sample.palette, canvas: "#EAF2F3", surface: "#F8FBFA", elevated: "#FFFFFF", text: "#142023", mutedText: "#66777C", border: "#C5D3D6", accent: "#168DA3", accentText: "#FFFFFF" } },
       { ...clone(sample), id: "amber-library", name: "琥珀图书馆", media: { ...sample.media, kind: "none" }, palette: { ...sample.palette, canvas: "#17130E", surface: "#211A12", elevated: "#2A2117", text: "#F4EBDD", mutedText: "#BDAE99", border: "#493B2A", accent: "#D79A36", accentText: "#1B1207" } }
     ];
-    return { themes: variants.map(theme => ({ theme, mediaUrl: theme.id === "rain-archive" ? "../SeedAssets/rain-archive.png" : null, badgeUrl: "assets/x-zhiyuan-emblem.png" })), settings: { defaultThemeId: "rain-archive", brokerEnabled: false }, status: { state: "codexStopped", message: "Codex 已就绪", codexVersion: "26.721" } };
+    return { themes: variants.map(theme => ({ theme, mediaUrl: theme.id === "rain-archive" ? "../SeedAssets/rain-archive.png" : null, badgeUrl: "assets/x-zhiyuan-emblem.png" })), settings: { defaultThemeId: "rain-archive", brokerEnabled: false }, status: { state: "codexStopped", message: "Codex 已就绪", codexVersion: "26.721" }, update: { state: "idle", currentVersion: "0.1.17", latestVersion: null, updateAvailable: false, readyToInstall: false, progress: 0, message: "尚未检查更新" } };
   }
 
   async function initialize() {
@@ -114,6 +123,7 @@
       const data = await api("bootstrap");
       applyBootstrap(data);
       $("#app-shell").classList.remove("is-loading");
+      scheduleUpdateCheck();
     } catch (error) {
       $("#app-shell").classList.remove("is-loading");
       toast("工作台未加载", error.message, "error");
@@ -124,8 +134,10 @@
     state.themes = data.themes || [];
     state.settings = data.settings || {};
     state.status = data.status || {};
+    state.update = data.update || state.update;
     $("#auto-apply-toggle").checked = Boolean(state.settings.brokerEnabled);
     renderStatus();
+    renderUpdateStatus();
     renderThemes();
     const preferred = state.themes.find(item => item.theme.id === state.settings.defaultThemeId) || state.themes[0];
     if (preferred) selectTheme(preferred.theme.id);
@@ -140,6 +152,13 @@
     });
     $("#theme-list").addEventListener("click", onThemeListClick);
     $("#refresh-button").addEventListener("click", refreshWorkbench);
+    $("#version-button").addEventListener("click", () => {
+      openUpdateDialog();
+      checkUpdates(false);
+    });
+    $("#update-chip").addEventListener("click", openUpdateDialog);
+    $("#cancel-update").addEventListener("click", () => $("#update-dialog").close());
+    $("#update-action-button").addEventListener("click", handleUpdateAction);
     $("#save-copy-button").addEventListener("click", openSaveDialog);
     $("#new-theme-button").addEventListener("click", openNewThemeDialog);
     $("#update-button").addEventListener("click", updateCurrentTheme);
@@ -1070,12 +1089,121 @@
       state.themes = data.themes || [];
       state.settings = data.settings || {};
       state.status = data.status || {};
+      state.update = data.update || state.update;
       $("#auto-apply-toggle").checked = Boolean(state.settings.brokerEnabled);
-      renderStatus(); renderThemes();
+      renderStatus(); renderUpdateStatus(); renderThemes();
       selectTheme(state.themes.some(item => item.theme.id === selected) ? selected : state.themes[0]?.theme.id);
       toast("已刷新", "主题图库和 Codex 状态已更新。", "success");
     } catch (error) { toast("刷新未完成", error.message, "error"); }
     finally { window.setTimeout(() => $("#refresh-button").classList.remove("spinning"), 260); }
+  }
+
+  function scheduleUpdateCheck() {
+    const run = () => checkUpdates(false);
+    if ("requestIdleCallback" in window) window.requestIdleCallback(run, { timeout: 1800 });
+    else window.setTimeout(run, 800);
+  }
+
+  async function checkUpdates(manual) {
+    if (state.update.state === "checking" || state.update.state === "downloading") return;
+    state.update = { ...state.update, state: "checking", message: "正在检查更新" };
+    renderUpdateStatus();
+    try {
+      state.update = await api("checkUpdate");
+      renderUpdateStatus();
+      if (state.update.updateAvailable) {
+        toast("发现新版本", `x纸鸢 ${state.update.latestVersion} 已可下载。`, "info");
+        if (manual) openUpdateDialog();
+      } else if (manual) {
+        toast("已是最新版本", `当前版本 ${state.update.currentVersion}。`, "success");
+      }
+    } catch (error) {
+      state.update = { ...state.update, state: "error", message: error.message };
+      renderUpdateStatus();
+      if (manual) toast("检查更新失败", error.message, "error");
+    }
+  }
+
+  function openUpdateDialog() {
+    renderUpdateStatus();
+    const dialog = $("#update-dialog");
+    if (!dialog.open) dialog.showModal();
+  }
+
+  async function handleUpdateAction() {
+    const status = state.update || {};
+    if (["idle", "current", "error"].includes(status.state)) {
+      await checkUpdates(true);
+      return;
+    }
+    if (status.state === "available") {
+      state.update = { ...status, state: "downloading", progress: 0, message: "正在下载更新" };
+      renderUpdateStatus();
+      try {
+        state.update = await api("downloadUpdate");
+        renderUpdateStatus();
+        toast("更新已准备", "安装包已通过 SHA-256 校验。", "success");
+      } catch (error) {
+        state.update = { ...state.update, state: "error", message: error.message };
+        renderUpdateStatus();
+        toast("更新下载失败", error.message, "error");
+      }
+      return;
+    }
+    if (status.state === "ready" || status.readyToInstall) {
+      state.update = { ...status, state: "installing", message: "正在启动安装程序" };
+      renderUpdateStatus();
+      try {
+        await api("installUpdate");
+      } catch (error) {
+        state.update = { ...status, state: "error", message: error.message };
+        renderUpdateStatus();
+        toast("安装没有启动", error.message, "error");
+      }
+    }
+  }
+
+  function renderUpdateStatus() {
+    const status = state.update || {};
+    const current = status.currentVersion || "0.0.0";
+    const latest = status.latestVersion || current;
+    const versionButton = $("#version-button");
+    const chip = $("#update-chip");
+    const action = $("#update-action-button");
+    $("#app-version").textContent = `x纸鸢 v${current}`;
+    versionButton.classList.toggle("available", Boolean(status.updateAvailable));
+    versionButton.classList.toggle("checking", status.state === "checking");
+    chip.hidden = !status.updateAvailable && !status.readyToInstall;
+    $("span", chip).textContent = status.readyToInstall ? `安装 v${latest}` : `可更新 v${latest}`;
+    setIcon(chip, status.readyToInstall ? "package-open" : "download");
+
+    $("#update-current-version").textContent = `v${current}`;
+    $("#update-latest-version").textContent = status.latestVersion ? `v${latest}` : status.state === "checking" ? "检查中" : "--";
+    $("#update-message").textContent = status.message || "尚未检查更新。";
+    const progress = Math.max(0, Math.min(100, Number(status.progress) || 0));
+    const progressArea = $("#update-progress");
+    progressArea.hidden = !["downloading", "ready"].includes(status.state);
+    $("#update-progress-bar").value = progress;
+    $("#update-progress-value").textContent = `${progress}%`;
+    $("#update-progress-label").textContent = status.state === "ready" ? "下载与校验完成" : "正在下载并校验";
+
+    const releaseLink = $("#release-link");
+    const trustedRelease = typeof status.releaseUrl === "string" && status.releaseUrl.startsWith("https://github.com/miaozyphp/xzhiyuan/");
+    releaseLink.hidden = !trustedRelease;
+    if (trustedRelease) releaseLink.href = status.releaseUrl;
+
+    const actionState = status.state || "idle";
+    const labels = {
+      idle: ["refresh-cw", "检查更新"], current: ["refresh-cw", "再次检查"], error: ["refresh-cw", "重新检查"],
+      checking: ["loader-circle", "检查中"], available: ["download", "下载更新"], downloading: ["loader-circle", `下载 ${progress}%`],
+      ready: ["package-open", "立即安装"], installing: ["loader-circle", "正在启动"]
+    };
+    const [icon, label] = labels[actionState] || labels.idle;
+    setIcon(action, icon);
+    $("span", action).textContent = label;
+    action.disabled = ["checking", "downloading", "installing"].includes(actionState);
+    action.classList.toggle("spinning", ["checking", "downloading", "installing"].includes(actionState));
+    refreshIcons();
   }
 
   function renderStatus() {

@@ -10,8 +10,8 @@ x纸鸢是一款独立的 Windows Codex 主题工作台。它把图片与视频�
 
 ## 立即体验
 
-**[下载 Windows 安装版 EXE](https://github.com/miaozyphp/xzhiyuan/releases/download/v0.1.16/XZhiYuan-Setup-0.1.16-win-x64.exe)**
-· [下载免安装便携包](https://github.com/miaozyphp/xzhiyuan/releases/download/v0.1.16/XZhiYuan-0.1.16-win-x64-portable.zip)
+**[下载 Windows 安装版 EXE](https://github.com/miaozyphp/xzhiyuan/releases/download/v0.1.17/XZhiYuan-Setup-0.1.17-win-x64.exe)**
+· [下载免安装便携包](https://github.com/miaozyphp/xzhiyuan/releases/download/v0.1.17/XZhiYuan-0.1.17-win-x64-portable.zip)
 · [查看全部版本](https://github.com/miaozyphp/xzhiyuan/releases)
 
 安装版适合直接下载体验；便携包解压后运行，适合不希望写入安装目录的用户。当前版本为未签名预览版，Windows 可能显示“未知发布者”或 SmartScreen 提示，请从本仓库下载并按 [校验说明](docs/verify-download.md) 核对 SHA-256。
