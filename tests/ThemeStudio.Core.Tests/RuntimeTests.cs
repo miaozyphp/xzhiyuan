@@ -63,6 +63,14 @@ public sealed class RuntimeTests
         Assert.Contains("refreshText", compiled.Script);
         Assert.Contains("--color-text-primary", compiled.Script);
         Assert.Contains("preservedTonePattern", compiled.Script);
+        Assert.Contains("interactiveControlSelector", compiled.Script);
+        Assert.Contains("[data-placeholder]", compiled.Script);
+        Assert.Contains("attributeFilter", compiled.Script);
+        Assert.Contains("bestReadableColor", compiled.Script);
+        Assert.Contains("--ts-node-text", compiled.Script);
+        Assert.Contains("--ts-readable-muted", compiled.Script);
+        Assert.Contains("body > #root", compiled.Script);
+        Assert.DoesNotContain("body > :not(#theme-studio-media)", compiled.Script);
         Assert.Contains("textObserver.disconnect", compiled.Script);
         Assert.Contains("removeAttribute('data-theme-studio-tone')", ThemeCompiler.CreateRemoveScript());
         Assert.DoesNotContain("button, [role='button'], input", compiled.Script);

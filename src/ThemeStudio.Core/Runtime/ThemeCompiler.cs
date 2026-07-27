@@ -5,7 +5,7 @@ namespace ThemeStudio.Core.Runtime;
 
 public static class ThemeCompiler
 {
-    private const string RuntimeVersion = "1.0.4";
+    private const string RuntimeVersion = "1.0.5";
 
     public static CompiledTheme Compile(
         ThemeDefinition theme,
@@ -73,7 +73,12 @@ public static class ThemeCompiler
           if (!active) return true;
           try { window.__themeStudioRuntime?.dispose?.(); } catch {}
           for (const element of ownedElements) element.remove();
-          for (const element of tonedElements) element.removeAttribute('data-theme-studio-tone');
+          for (const element of tonedElements) {
+            element.removeAttribute('data-theme-studio-tone');
+            element.style.removeProperty('--ts-node-text');
+            element.style.removeProperty('--ts-node-shadow');
+            element.style.removeProperty('--ts-node-outline');
+          }
           const root = document.documentElement;
           for (const key of [
             '--ts-canvas','--ts-surface','--ts-elevated','--ts-text','--ts-muted','--ts-border','--ts-accent',
@@ -84,6 +89,7 @@ public static class ThemeCompiler
             '--ts-media-position','--ts-badge-size','--ts-badge-opacity','--ts-color-scheme','--ts-surface-opacity',
             '--ts-badge-radius','--ts-badge-background-opacity','--ts-badge-border-opacity','--ts-sidebar-opacity',
             '--ts-composer-opacity','--ts-bubble-opacity','--ts-surface-blur','--ts-surface-radius','--ts-text-shadow',
+            '--ts-text-outline','--ts-readable-muted',
             '--color-text-primary','--color-text-secondary','--color-text-tertiary','--text-primary','--text-secondary',
             '--token-text-primary','--token-text-secondary','--token-text-tertiary','--sidebar-foreground',
             '--sidebar-accent-foreground','--input-foreground'
@@ -131,14 +137,19 @@ public static class ThemeCompiler
             :root[data-theme-studio] { color-scheme: var(--ts-color-scheme); }
             :root[data-theme-studio], :root[data-theme-studio] body { color: var(--ts-text) !important; background-color: var(--ts-canvas) !important; }
             :root[data-theme-studio] body { position: relative; }
-            :root[data-theme-studio] [data-theme-studio-tone='primary'] { color: var(--ts-text) !important; text-shadow: var(--ts-text-shadow); }
-            :root[data-theme-studio] [data-theme-studio-tone='muted'] { color: var(--ts-muted) !important; text-shadow: var(--ts-text-shadow); }
-            :root[data-theme-studio] [data-theme-studio-tone='inverse'] { color: var(--ts-accent-text) !important; text-shadow: none; }
-            :root[data-theme-studio] :where(input, textarea, [contenteditable='true'])::placeholder { color: var(--ts-muted) !important; opacity: 1; }
+            :root[data-theme-studio] [data-theme-studio-tone='primary'] { color: var(--ts-text) !important; text-shadow: var(--ts-text-shadow); -webkit-text-stroke: .12px var(--ts-text-outline); }
+            :root[data-theme-studio] [data-theme-studio-tone='muted'] { color: var(--ts-readable-muted) !important; text-shadow: var(--ts-text-shadow); -webkit-text-stroke: .12px var(--ts-text-outline); }
+            :root[data-theme-studio] [data-theme-studio-tone='adaptive'] { color: var(--ts-node-text) !important; text-shadow: var(--ts-node-shadow); -webkit-text-stroke: .12px var(--ts-node-outline); }
+            :root[data-theme-studio] [data-theme-studio-tone] { text-rendering: optimizeLegibility; }
+            :root[data-theme-studio] [data-theme-studio-tone]:where(button, [role='button'], [role='menuitem'], [role='tab']):not(:disabled):not([aria-disabled='true']) { opacity: 1 !important; }
+            :root[data-theme-studio] [data-theme-studio-tone] > svg { color: inherit !important; }
+            :root[data-theme-studio] :where(input, textarea, [contenteditable='true'])::placeholder { color: inherit !important; opacity: .72; }
+            :root[data-theme-studio] :where([data-placeholder], [aria-placeholder], .placeholder)::before,
+            :root[data-theme-studio] :where([data-placeholder], [aria-placeholder], .placeholder)::after { color: var(--ts-readable-muted) !important; opacity: .82 !important; text-shadow: var(--ts-text-shadow); -webkit-text-stroke: .12px var(--ts-text-outline); }
             #theme-studio-media { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; background: var(--ts-canvas); }
-            #theme-studio-media::after { content: ''; position: absolute; inset: 0; background: color-mix(in srgb, var(--ts-canvas) 8%, transparent); }
+            #theme-studio-media::after { content: ''; position: absolute; inset: 0; background: color-mix(in srgb, var(--ts-canvas) 14%, transparent); }
             #theme-studio-media > img, #theme-studio-media > video { width: 100%; height: 100%; object-fit: var(--ts-media-fit); object-position: var(--ts-media-position); opacity: var(--ts-media-opacity); filter: blur(var(--ts-media-blur)); transform: scale(1.02); }
-            :root[data-theme-studio] body > :not(#theme-studio-media):not(#theme-studio-badge) { position: relative; z-index: 1; }
+            :root[data-theme-studio] body > #root { position: relative; z-index: 1; }
             :root[data-theme-studio-surfaces='true'] aside.app-shell-left-panel { background-color: color-mix(in srgb, var(--ts-surface) calc(var(--ts-sidebar-opacity) * 100%), transparent) !important; backdrop-filter: none !important; }
             :root[data-theme-studio-surfaces='true'] main.main-surface { background-color: color-mix(in srgb, var(--ts-surface) calc(var(--ts-surface-opacity) * 100%), transparent) !important; backdrop-filter: none !important; }
             :root[data-theme-studio-surfaces='true'] main.main-surface [class~='bg-token-main-surface-primary'] { background-color: color-mix(in srgb, var(--ts-surface) calc(var(--ts-surface-opacity) * 100%), transparent) !important; }
@@ -179,19 +190,26 @@ public static class ThemeCompiler
           root.style.setProperty('--ts-bubble-opacity', String(config.surfaces.bubbleOpacity));
           root.style.setProperty('--ts-surface-blur', `${config.surfaces.blur}px`);
           root.style.setProperty('--ts-surface-radius', `${config.surfaces.radius}px`);
+          root.style.setProperty('--ts-readable-muted', `color-mix(in srgb, ${p.mutedText} 62%, ${p.text})`);
+          root.style.setProperty('--ts-text-outline', config.scheme === 'dark' ? 'rgb(0 0 0 / 92%)' : 'rgb(255 255 255 / 94%)');
           root.style.setProperty('--ts-text-shadow', config.scheme === 'dark'
-            ? '0 1px 2px rgb(0 0 0 / 82%), 0 0 9px rgb(0 0 0 / 34%)'
-            : '0 1px 2px rgb(255 255 255 / 92%), 0 0 8px rgb(255 255 255 / 48%)');
+            ? '0 1px 2px rgb(0 0 0 / 96%), 1px 0 1px rgb(0 0 0 / 76%), -1px 0 1px rgb(0 0 0 / 76%), 0 -1px 1px rgb(0 0 0 / 72%), 0 0 10px rgb(0 0 0 / 58%)'
+            : '0 1px 2px rgb(255 255 255 / 98%), 1px 0 1px rgb(255 255 255 / 82%), -1px 0 1px rgb(255 255 255 / 82%), 0 -1px 1px rgb(255 255 255 / 78%), 0 0 9px rgb(255 255 255 / 62%)');
           if (config.layers.surfaces) root.dataset.themeStudioSurfaces = 'true';
           if (config.mode === 'deep' && (config.layers.hero || config.layers.suggestions || config.layers.homeLayout)) root.dataset.themeStudioDeep = 'true';
 
           const toneAttribute = 'data-theme-studio-tone';
           const textControlSelector = "input, textarea, select, [contenteditable='true']";
+          const interactiveControlSelector = "button, a[href], [role='button'], [role='menuitem'], [role='tab'], [role='option'], [aria-label]";
           const ignoredTextSelector = "#theme-studio-media, #theme-studio-badge, [data-theme-studio-owned='true'], script, style, noscript, svg, canvas, pre, code, kbd, samp, .monaco-editor, .cm-editor, [class*='syntax'], [class*='terminal']";
           const preservedTonePattern = /(?:^|[\s:_-])(?:success|warning|danger|destructive|error)(?:$|[\s:_-])|text-(?:red|green|emerald|yellow|amber|orange|blue|cyan|teal|violet|purple|pink|rose)-/i;
           const mutedTonePattern = /muted|secondary|tertiary|subtle|description|caption|placeholder|timestamp|metadata|hint|disabled/i;
           const themeText = parseColor(p.text);
+          const themeMuted = mixColors(parseColor(p.mutedText), themeText, .38);
           const accentText = parseColor(p.accentText);
+          const canvasText = parseColor(p.canvas);
+          const lightFallback = parseColor('#F8FAFB');
+          const darkFallback = parseColor('#0A0F12');
 
           function parseColor(value) {
             if (!value) return null;
@@ -218,12 +236,56 @@ public static class ThemeCompiler
             return (high + .05) / (low + .05);
           }
 
+          function mixColors(left, right, rightAmount) {
+            if (!left) return right;
+            if (!right) return left;
+            return {
+              r: left.r * (1 - rightAmount) + right.r * rightAmount,
+              g: left.g * (1 - rightAmount) + right.g * rightAmount,
+              b: left.b * (1 - rightAmount) + right.b * rightAmount,
+              a: 1
+            };
+          }
+
+          function composite(foreground, background) {
+            if (!foreground) return background;
+            if (!background || foreground.a >= .999) return { ...foreground, a: 1 };
+            const alpha = foreground.a + background.a * (1 - foreground.a);
+            return {
+              r: (foreground.r * foreground.a + background.r * background.a * (1 - foreground.a)) / alpha,
+              g: (foreground.g * foreground.a + background.g * background.a * (1 - foreground.a)) / alpha,
+              b: (foreground.b * foreground.a + background.b * background.a * (1 - foreground.a)) / alpha,
+              a: alpha
+            };
+          }
+
           function nearestBackground(element) {
+            const layers = [];
             for (let current = element; current; current = current.parentElement) {
               const color = parseColor(getComputedStyle(current).backgroundColor);
-              if (color?.a >= .58) return color;
+              if (color?.a > .01) layers.push(color);
             }
-            return parseColor(p.canvas);
+            let background = canvasText;
+            for (let index = layers.length - 1; index >= 0; index--) background = composite(layers[index], background);
+            return background;
+          }
+
+          function formatColor(color) {
+            return `rgb(${Math.round(color.r)} ${Math.round(color.g)} ${Math.round(color.b)})`;
+          }
+
+          function bestReadableColor(background, preferred) {
+            return [preferred, accentText, canvasText, lightFallback, darkFallback]
+              .filter(Boolean)
+              .map(color => ({ color, score: contrast(color, background) }))
+              .sort((left, right) => right.score - left.score)[0];
+          }
+
+          function clearTextTheme(element) {
+            element.removeAttribute(toneAttribute);
+            element.style.removeProperty('--ts-node-text');
+            element.style.removeProperty('--ts-node-shadow');
+            element.style.removeProperty('--ts-node-outline');
           }
 
           function signature(element) {
@@ -238,31 +300,45 @@ public static class ThemeCompiler
           }
 
           function hasOwnText(element) {
-            if (element.matches(textControlSelector)) return true;
+            if (element.matches(textControlSelector) || element.matches(interactiveControlSelector)) return true;
             return [...element.childNodes].some(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
           }
 
           function classifyText(element) {
             if (!(element instanceof HTMLElement)) return;
             if (element.matches(ignoredTextSelector) || element.closest(ignoredTextSelector)) {
-              element.removeAttribute(toneAttribute);
+              clearTextTheme(element);
               return;
             }
             if (!hasOwnText(element)) {
-              element.removeAttribute(toneAttribute);
+              clearTextTheme(element);
               return;
             }
             if (element.closest("[role='alert'], [aria-invalid='true'], [data-theme-studio-preserve-color='true']") || hasPatternInAncestors(element, preservedTonePattern)) {
-              element.removeAttribute(toneAttribute);
+              clearTextTheme(element);
               return;
             }
 
             const muted = hasPatternInAncestors(element, mutedTonePattern) || Number.parseFloat(getComputedStyle(element).opacity) < .8;
             const background = nearestBackground(element);
-            const primaryContrast = contrast(themeText, background);
-            const inverseContrast = contrast(accentText, background);
-            const tone = !muted && primaryContrast < 3 && inverseContrast >= primaryContrast + 1.25 ? 'inverse' : muted ? 'muted' : 'primary';
-            element.setAttribute(toneAttribute, tone);
+            const preferred = muted ? themeMuted : themeText;
+            const preferredContrast = contrast(preferred, background);
+            const best = bestReadableColor(background, preferred);
+            if (preferredContrast < 4.5 && best?.score >= preferredContrast + .75) {
+              const lightText = luminance(best.color) > .48;
+              element.style.setProperty('--ts-node-text', formatColor(best.color));
+              element.style.setProperty('--ts-node-outline', lightText ? 'rgb(0 0 0 / 94%)' : 'rgb(255 255 255 / 96%)');
+              element.style.setProperty('--ts-node-shadow', lightText
+                ? '0 1px 2px rgb(0 0 0 / 92%), 0 0 8px rgb(0 0 0 / 52%)'
+                : '0 1px 2px rgb(255 255 255 / 96%), 0 0 7px rgb(255 255 255 / 64%)');
+              element.setAttribute(toneAttribute, 'adaptive');
+              return;
+            }
+
+            element.style.removeProperty('--ts-node-text');
+            element.style.removeProperty('--ts-node-shadow');
+            element.style.removeProperty('--ts-node-outline');
+            element.setAttribute(toneAttribute, muted ? 'muted' : 'primary');
           }
 
           function scanText(rootNode) {
@@ -294,6 +370,7 @@ public static class ThemeCompiler
           const textObserver = new MutationObserver(mutations => {
             for (const mutation of mutations) {
               if (mutation.type === 'characterData') queueTextScan(mutation.target);
+              else if (mutation.type === 'attributes') queueTextScan(mutation.target);
               else {
                 const changedElement = mutation.target?.nodeType === Node.ELEMENT_NODE ? mutation.target : mutation.target?.parentElement;
                 if (changedElement) classifyText(changedElement);
@@ -302,7 +379,13 @@ public static class ThemeCompiler
             }
           });
           scanText(document.body);
-          textObserver.observe(document.body, { subtree: true, childList: true, characterData: true });
+          textObserver.observe(document.body, {
+            subtree: true,
+            childList: true,
+            characterData: true,
+            attributes: true,
+            attributeFilter: ['class', 'data-placeholder', 'aria-placeholder', 'aria-label', 'role', 'disabled', 'aria-disabled']
+          });
 
           if (config.layers.media && config.media.url && config.media.kind !== 'none') {
             const mediaRoot = add(document.createElement('div'));
@@ -330,11 +413,11 @@ public static class ThemeCompiler
           const dispose = () => {
             textObserver.disconnect();
             if (scanFrame) cancelAnimationFrame(scanFrame);
-            for (const element of document.querySelectorAll(`[${toneAttribute}]`)) element.removeAttribute(toneAttribute);
+            for (const element of document.querySelectorAll(`[${toneAttribute}]`)) clearTextTheme(element);
             for (const element of document.querySelectorAll('[data-theme-studio-owned="true"]')) element.remove();
             for (const url of config.objectUrls || []) { try { URL.revokeObjectURL(url); } catch {} }
             for (const key of Object.keys(properties)) root.style.removeProperty(key);
-            for (const key of ['--ts-media-opacity','--ts-media-blur','--ts-media-fit','--ts-media-position','--ts-badge-size','--ts-badge-opacity','--ts-badge-radius','--ts-badge-background-opacity','--ts-badge-border-opacity','--ts-color-scheme','--ts-surface-opacity','--ts-sidebar-opacity','--ts-composer-opacity','--ts-bubble-opacity','--ts-surface-blur','--ts-surface-radius','--ts-text-shadow']) root.style.removeProperty(key);
+            for (const key of ['--ts-media-opacity','--ts-media-blur','--ts-media-fit','--ts-media-position','--ts-badge-size','--ts-badge-opacity','--ts-badge-radius','--ts-badge-background-opacity','--ts-badge-border-opacity','--ts-color-scheme','--ts-surface-opacity','--ts-sidebar-opacity','--ts-composer-opacity','--ts-bubble-opacity','--ts-surface-blur','--ts-surface-radius','--ts-text-shadow','--ts-text-outline','--ts-readable-muted']) root.style.removeProperty(key);
             delete root.dataset.themeStudio;
             delete root.dataset.themeStudioDeep;
             delete root.dataset.themeStudioSurfaces;

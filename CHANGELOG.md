@@ -2,6 +2,13 @@
 
 All notable changes to x纸鸢 are documented here.
 
+## 0.1.15 - 2026-07-27
+
+- Added background-aware text colors for light popovers and stronger outlines over bright image and video regions.
+- Increased secondary-text clarity and themed icon-only controls, generated editor placeholders, menus, and floating panels.
+- Restored Codex image enlargement, notifications, and portal overlays by preserving their native fixed positioning and z-index.
+- Limited live text observation to relevant DOM and attribute changes to retain responsive scrolling and streaming output.
+
 ## 0.1.14 - 2026-07-27
 
 - Fixed Codex updates and light native color schemes forcing black text over dark image and video themes.
