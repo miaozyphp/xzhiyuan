@@ -126,7 +126,8 @@ function Sign-ReleaseFile(
     [string] $ToolPath,
     [string] $Thumbprint,
     [string] $TimestampServer) {
-    & $ToolPath sign /sha1 $Thumbprint /s My /fd SHA256 /tr $TimestampServer /td SHA256 /d 'x纸鸢' $Path
+    $productName = 'x' + [char]0x7EB8 + [char]0x9E22
+    & $ToolPath sign /sha1 $Thumbprint /s My /fd SHA256 /tr $TimestampServer /td SHA256 /d $productName $Path
     if ($LASTEXITCODE -ne 0) {
         throw "Code signing failed: $Path"
     }
