@@ -10,13 +10,13 @@ x纸鸢是一款独立的 Windows Codex 主题工作台。它把图片与视频�
 
 ## 立即体验
 
-**[下载 Windows 安装版 EXE](https://github.com/miaozyphp/xzhiyuan/releases/download/v0.1.17/XZhiYuan-Setup-0.1.17-win-x64.exe)**
-· [下载免安装便携包](https://github.com/miaozyphp/xzhiyuan/releases/download/v0.1.17/XZhiYuan-0.1.17-win-x64-portable.zip)
+**[下载 Windows 安装版 EXE](https://github.com/miaozyphp/xzhiyuan/releases/download/v0.1.18/XZhiYuan-Setup-0.1.18-win-x64.exe)**
+· [下载免安装便携包](https://github.com/miaozyphp/xzhiyuan/releases/download/v0.1.18/XZhiYuan-0.1.18-win-x64-portable.zip)
 · [查看全部版本](https://github.com/miaozyphp/xzhiyuan/releases)
 
 安装版适合直接下载体验；便携包解压后运行，适合不希望写入安装目录的用户。当前版本为未签名预览版，Windows 可能显示“未知发布者”或 SmartScreen 提示，请从本仓库下载并按 [校验说明](docs/verify-download.md) 核对 SHA-256。
 
-Apple Silicon Mac 版本正在 `feature/macos` 分支开发，完成真实 M 系列 Mac 与 Codex 验收后再提供下载。
+Apple Silicon Mac 候选版本已进入主分支，完成真实 M 系列 Mac 与 Codex 验收后再提供下载。
 
 ## 界面预览
 
@@ -34,8 +34,8 @@ Apple Silicon Mac 版本正在 `feature/macos` 分支开发，完成真实 M 系
 | 标准与深度模式 | 标准模式侧重稳定的背景和配色；深度模式可进一步调整 Hero、建议卡片与首页构图。 |
 | 分层外观控制 | 背景、表面、组件、角标和深度布局可以分别启停，单层不兼容不会拖垮整个主题。 |
 | 可视化预览 | 无需先启动 Codex，即可切换首页、任务页和设置页检查文字、输入框、气泡与浮层效果。 |
-| 本地主题管理 | 支持新建、另存为、修改、复制、删除、默认主题以及自定义图片/视频分组。 |
-| 拖放与批量导入 | 将一个或多个图片、视频拖入左侧主题库，即可批量创建自定义主题。 |
+| 本地主题管理 | 支持新建、另存为、修改、复制、快捷删除、批量删除、默认主题以及自定义图片/视频分组。 |
+| 拖放与批量导入 | 将一个或多个图片、视频拖入左侧主题库，即可批量创建自定义主题；重复内容自动跳过且不中断其余文件。 |
 | 自动应用 | 可选后台代理让直接启动的 Codex 自动加载默认主题，也可随时关闭。 |
 | 安全回退 | 不修改 Codex 安装包或签名；应用失败时只卸下主题，不关闭 Codex。 |
 

@@ -79,7 +79,7 @@
     if (method !== "bootstrap" && method !== "refresh") {
       await new Promise(resolve => setTimeout(resolve, 220));
       if (method === "applyTheme" || method === "launchCodex") return { success: true, message: "预览模式：皮肤已准备。", suspendedLayers: [] };
-      if (method === "checkUpdate") return { state: "available", currentVersion: "0.1.17", latestVersion: "0.1.18", updateAvailable: true, readyToInstall: false, progress: 0, message: "发现新版本 0.1.18", releaseUrl: "https://github.com/miaozyphp/xzhiyuan/releases/tag/v0.1.18" };
+      if (method === "checkUpdate") return { state: "available", currentVersion: "0.1.18", latestVersion: "0.1.19", updateAvailable: true, readyToInstall: false, progress: 0, message: "发现新版本 0.1.19", releaseUrl: "https://github.com/miaozyphp/xzhiyuan/releases/tag/v0.1.19" };
       if (method === "downloadUpdate") return { ...state.update, state: "ready", readyToInstall: true, progress: 100, message: "更新已下载并通过校验" };
       if (method === "installUpdate") return { started: true };
       if (method === "pickMedia" || method === "pickBadge") return { cancelled: true };
@@ -124,7 +124,7 @@
       { ...clone(sample), id: "personal-rain", name: "我的雨夜", builtIn: false, updatedAt: new Date().toISOString() },
       { ...clone(sample), id: "personal-paper", name: "我的晴空", builtIn: false, mode: "standard", media: { ...sample.media, kind: "none" }, updatedAt: new Date().toISOString() }
     ];
-    return { platform: "windows", themes: variants.map(theme => ({ theme, mediaUrl: theme.id === "rain-archive" || theme.id === "personal-rain" ? "../SeedAssets/rain-archive.png" : null, badgeUrl: "assets/x-zhiyuan-emblem.png" })), settings: { defaultThemeId: "rain-archive", brokerEnabled: false }, status: { state: "codexStopped", message: "Codex 已就绪", codexVersion: "26.721" }, update: { state: "idle", currentVersion: "0.1.17", latestVersion: null, updateAvailable: false, readyToInstall: false, progress: 0, message: "尚未检查更新" } };
+    return { platform: "windows", themes: variants.map(theme => ({ theme, mediaUrl: theme.id === "rain-archive" || theme.id === "personal-rain" ? "../SeedAssets/rain-archive.png" : null, badgeUrl: "assets/x-zhiyuan-emblem.png" })), settings: { defaultThemeId: "rain-archive", brokerEnabled: false }, status: { state: "codexStopped", message: "Codex 已就绪", codexVersion: "26.721" }, update: { state: "idle", currentVersion: "0.1.18", latestVersion: null, updateAvailable: false, readyToInstall: false, progress: 0, message: "尚未检查更新" } };
   }
 
   async function initialize() {

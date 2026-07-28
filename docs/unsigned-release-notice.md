@@ -4,15 +4,22 @@
 
 - `XZhiYuan-Setup-<version>-win-x64.exe`：Windows 安装版，推荐首次体验使用。
 - `XZhiYuan-<version>-win-x64-portable.zip`：免安装便携包，解压后运行。
-- `XZhiYuan-Setup-<version>-macos-arm64.dmg`：Apple Silicon Mac 安装版。
-- `XZhiYuan-<version>-macos-arm64.zip`：Apple Silicon Mac 便携包。
+
+Apple Silicon Mac 候选版本仍在真实设备验收阶段，本次 Release 不提供 macOS 安装包。
+
+## 0.1.18 更新内容
+
+- 自定义主题列表增加始终可见的快捷删除按钮。
+- 增加复选框批量管理、全选、批量删除和失败数量反馈。
+- 图片与视频导入增加 SHA-256 内容去重，改名或更换扩展名也不会重复创建。
+- 批量导入遇到重复、损坏、不支持或过大的文件时继续处理其余文件。
 
 ## 核心功能
 
 - 图片与视频双模式背景，可调整可见度、模糊、填充方式和画面位置。
 - 标准模式与深度模式，可分别控制配色、透明表面、组件、角标和首页布局。
 - 首页、任务页、设置页可视化预览，无需反复启动 Codex 试效果。
-- 自定义主题支持新建、复制、修改、删除、设为默认以及图片/视频批量拖入。
+- 自定义主题支持新建、复制、修改、快捷删除、批量删除、设为默认以及图片/视频批量拖入。
 - 可选自动应用代理，直接启动 Codex 时也能加载默认主题。
 
 ![x纸鸢工作台](https://raw.githubusercontent.com/miaozyphp/xzhiyuan/main/docs/screenshots/workbench-overview.png)

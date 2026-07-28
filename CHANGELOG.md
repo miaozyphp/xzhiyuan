@@ -9,6 +9,13 @@ All notable changes to x纸鸢 are documented here.
 - Added macOS Codex bundle discovery, managed restart, menu-bar residency, login auto-apply, native file selection, and DMG updates.
 - Added isolated Electron IPC, platform-specific window-control handling, and macOS package tests.
 
+## 0.1.18 - 2026-07-28
+
+- Added always-visible quick deletion for custom themes and checkbox-based batch management.
+- Added batch deletion with independent failure handling, safe default-theme recovery, and clear confirmation feedback.
+- Added SHA-256 media deduplication so identical images or videos are skipped even when their names or extensions differ.
+- Kept batch imports running when duplicate, unreadable, unsupported, or oversized files are encountered.
+
 ## 0.1.17 - 2026-07-27
 
 - Replaced the title-bar styling workaround with a simple neutral contrast backdrop verified against a real Codex window capture.
