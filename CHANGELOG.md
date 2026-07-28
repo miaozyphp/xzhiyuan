@@ -2,6 +2,13 @@
 
 All notable changes to x纸鸢 are documented here.
 
+## Unreleased
+
+- Added an Apple Silicon macOS candidate application and DMG build.
+- Reused the existing theme library, preview, image/video import, standard/deep modes, and Codex CDP runtime across platforms.
+- Added macOS Codex bundle discovery, managed restart, menu-bar residency, login auto-apply, native file selection, and DMG updates.
+- Added isolated Electron IPC, platform-specific window-control handling, and macOS package tests.
+
 ## 0.1.17 - 2026-07-27
 
 - Replaced the title-bar styling workaround with a simple neutral contrast backdrop verified against a real Codex window capture.

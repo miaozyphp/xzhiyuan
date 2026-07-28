@@ -46,7 +46,43 @@ public sealed class ReleaseUpdateServiceTests
         Assert.False(service.Status.ReadyToInstall);
     }
 
-    private sealed class ReleaseHandler(byte[] installer, string digest) : HttpMessageHandler
+    [Fact]
+    public async Task SelectsAppleSiliconDmgForMacUpdates()
+    {
+        using var temp = new TempDirectory();
+        var installer = Encoding.UTF8.GetBytes("verified macOS package");
+        var digest = Convert.ToHexString(SHA256.HashData(installer)).ToLowerInvariant();
+        const string assetName = "XZhiYuan-Setup-9.9.9-macos-arm64.dmg";
+        using var client = new HttpClient(new ReleaseHandler(installer, digest, assetName));
+        var service = new ReleaseUpdateService(temp.Path, "0.1.0", client, ReleaseUpdateTarget.MacOSArm64);
+
+        await service.CheckAsync();
+        var ready = await service.DownloadAsync();
+
+        Assert.True(ready.ReadyToInstall);
+        Assert.EndsWith(assetName, await service.GetVerifiedInstallerAsync(), StringComparison.Ordinal);
+        Assert.Empty(Directory.GetFiles(temp.Path, "*.exe"));
+    }
+
+    [Fact]
+    public async Task DoesNotDisplayAnOlderReleaseAsLatest()
+    {
+        using var temp = new TempDirectory();
+        var installer = Encoding.UTF8.GetBytes("older package");
+        var digest = Convert.ToHexString(SHA256.HashData(installer)).ToLowerInvariant();
+        using var client = new HttpClient(new ReleaseHandler(installer, digest));
+        var service = new ReleaseUpdateService(temp.Path, "10.0.0", client);
+
+        var status = await service.CheckAsync();
+
+        Assert.False(status.UpdateAvailable);
+        Assert.Equal("10.0.0", status.LatestVersion);
+    }
+
+    private sealed class ReleaseHandler(
+        byte[] installer,
+        string digest,
+        string assetName = "XZhiYuan-Setup-9.9.9-win-x64.exe") : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -64,8 +100,8 @@ public sealed class ReleaseUpdateServiceTests
                         {
                             new
                             {
-                                name = "XZhiYuan-Setup-9.9.9-win-x64.exe",
-                                browser_download_url = "https://github.com/miaozyphp/xzhiyuan/releases/download/v9.9.9/XZhiYuan-Setup-9.9.9-win-x64.exe",
+                                name = assetName,
+                                browser_download_url = $"https://github.com/miaozyphp/xzhiyuan/releases/download/v9.9.9/{assetName}",
                                 size = installer.Length,
                                 digest = $"sha256:{digest}"
                             }
@@ -78,7 +114,7 @@ public sealed class ReleaseUpdateServiceTests
                 });
             }
 
-            if (request.RequestUri?.AbsoluteUri.EndsWith("XZhiYuan-Setup-9.9.9-win-x64.exe", StringComparison.Ordinal) == true)
+            if (request.RequestUri?.AbsoluteUri.EndsWith(assetName, StringComparison.Ordinal) == true)
             {
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                 {

@@ -4,6 +4,8 @@
 
 - `XZhiYuan-Setup-<version>-win-x64.exe`：Windows 安装版，推荐首次体验使用。
 - `XZhiYuan-<version>-win-x64-portable.zip`：免安装便携包，解压后运行。
+- `XZhiYuan-Setup-<version>-macos-arm64.dmg`：Apple Silicon Mac 安装版。
+- `XZhiYuan-<version>-macos-arm64.zip`：Apple Silicon Mac 便携包。
 
 ## 核心功能
 

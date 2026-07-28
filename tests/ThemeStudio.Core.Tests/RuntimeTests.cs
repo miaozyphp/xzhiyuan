@@ -24,6 +24,18 @@ public sealed class RuntimeTests
     }
 
     [Fact]
+    public void OmitsWindowsControlBackdropForMacRuntime()
+    {
+        var theme = DefaultThemeCatalog.Create()[0];
+        var report = new CompatibilityReport(true, [], []);
+
+        var compiled = ThemeCompiler.Compile(theme, null, null, report, includeWindowControlsBackdrop: false);
+
+        Assert.Contains("\"windowControlsBackdrop\":false", compiled.Script);
+        Assert.Contains("if (config.windowControlsBackdrop)", compiled.Script);
+    }
+
+    [Fact]
     public void StandardModeDoesNotRequireDeepTargets()
     {
         var theme = ThemeValidatorTests.CreateTheme() with { Mode = ThemeMode.Standard };

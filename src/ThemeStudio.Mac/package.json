@@ -1,0 +1,17 @@
+{
+  "name": "xzhiyuan-macos",
+  "version": "0.2.0",
+  "private": true,
+  "description": "x纸鸢 Codex theme workbench for macOS",
+  "main": "main.cjs",
+  "author": "x纸鸢 contributors",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "electron": "43.2.0",
+    "electron-builder": "26.15.3"
+  }
+}

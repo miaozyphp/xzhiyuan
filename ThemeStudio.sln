@@ -13,6 +13,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{CE14DA69
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ThemeStudio.Core.Tests", "tests\ThemeStudio.Core.Tests\ThemeStudio.Core.Tests.csproj", "{B568744E-BE32-4E48-B5D1-0F966366C1C1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ThemeStudio.MacBridge", "src\ThemeStudio.MacBridge\ThemeStudio.MacBridge.csproj", "{ACA80275-6DAF-47D8-8A1E-66B569413EB1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -34,10 +36,15 @@ Global
 		{B568744E-BE32-4E48-B5D1-0F966366C1C1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B568744E-BE32-4E48-B5D1-0F966366C1C1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B568744E-BE32-4E48-B5D1-0F966366C1C1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ACA80275-6DAF-47D8-8A1E-66B569413EB1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ACA80275-6DAF-47D8-8A1E-66B569413EB1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ACA80275-6DAF-47D8-8A1E-66B569413EB1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ACA80275-6DAF-47D8-8A1E-66B569413EB1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{A07F1C0B-0558-44EA-9CD4-B425B8FDA2E1} = {C110C9AB-B649-447B-A7AB-B3E5286B4402}
 		{8ADCAA84-1353-4D1A-81BF-53C9D45A489D} = {C110C9AB-B649-447B-A7AB-B3E5286B4402}
 		{B568744E-BE32-4E48-B5D1-0F966366C1C1} = {CE14DA69-2975-44C9-9C3A-9BF484233848}
+		{ACA80275-6DAF-47D8-8A1E-66B569413EB1} = {C110C9AB-B649-447B-A7AB-B3E5286B4402}
 	EndGlobalSection
 EndGlobal

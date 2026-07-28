@@ -16,6 +16,8 @@ x纸鸢是一款独立的 Windows Codex 主题工作台。它把图片与视频�
 
 安装版适合直接下载体验；便携包解压后运行，适合不希望写入安装目录的用户。当前版本为未签名预览版，Windows 可能显示“未知发布者”或 SmartScreen 提示，请从本仓库下载并按 [校验说明](docs/verify-download.md) 核对 SHA-256。
 
+Apple Silicon Mac 版本正在 `feature/macos` 分支开发，完成真实 M 系列 Mac 与 Codex 验收后再提供下载。
+
 ## 界面预览
 
 ![x纸鸢工作台总览](docs/screenshots/workbench-overview.png)

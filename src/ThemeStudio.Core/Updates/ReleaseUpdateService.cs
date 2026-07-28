@@ -7,6 +7,12 @@ using System.Text.Json.Serialization;
 
 namespace ThemeStudio.Core.Updates;
 
+public enum ReleaseUpdateTarget
+{
+    WindowsX64,
+    MacOSArm64
+}
+
 public sealed record AppUpdateStatus(
     string State,
     string CurrentVersion,
@@ -26,15 +32,21 @@ public sealed class ReleaseUpdateService
 
     private readonly string _downloadRoot;
     private readonly HttpClient _http;
+    private readonly ReleaseUpdateTarget _target;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly object _statusGate = new();
     private AvailableUpdate? _available;
     private string? _verifiedInstaller;
     private AppUpdateStatus _status;
 
-    public ReleaseUpdateService(string downloadRoot, string? currentVersion = null, HttpClient? httpClient = null)
+    public ReleaseUpdateService(
+        string downloadRoot,
+        string? currentVersion = null,
+        HttpClient? httpClient = null,
+        ReleaseUpdateTarget target = ReleaseUpdateTarget.WindowsX64)
     {
         _downloadRoot = Path.GetFullPath(downloadRoot);
+        _target = target;
         CurrentVersion = NormalizeVersion(currentVersion ?? EntryVersion());
         _http = httpClient ?? new HttpClient { Timeout = TimeSpan.FromMinutes(15) };
         if (!_http.DefaultRequestHeaders.UserAgent.Any())
@@ -71,14 +83,15 @@ public sealed class ReleaseUpdateService
             {
                 _available = null;
                 _verifiedInstaller = null;
-                return SetStatus(new AppUpdateStatus("current", CurrentVersion, latest?.Version.ToString(3), false, false, 100, "当前已是最新版本", latest?.Release.HtmlUrl));
+                var displayedLatest = latest is null || latest.Version < current ? CurrentVersion : latest.Version.ToString(3);
+                return SetStatus(new AppUpdateStatus("current", CurrentVersion, displayedLatest, false, false, 100, "当前已是最新版本", latest?.Release.HtmlUrl));
             }
 
             var version = latest.Version.ToString(3);
-            var expectedName = $"XZhiYuan-Setup-{version}-win-x64.exe";
+            var expectedName = GetPackageName(version);
             var installer = latest.Release.Assets.FirstOrDefault(asset => string.Equals(asset.Name, expectedName, StringComparison.Ordinal));
             if (installer is null || !IsTrustedDownloadUrl(installer.BrowserDownloadUrl))
-                throw new InvalidDataException("新版本没有可验证的 Windows 安装包。");
+                throw new InvalidDataException("新版本没有可验证的安装包。");
 
             var sha256 = ParseDigest(installer.Digest) ?? await ReadChecksumAsync(latest.Release, expectedName, cancellationToken);
             if (sha256 is null)
@@ -107,7 +120,7 @@ public sealed class ReleaseUpdateService
         {
             var update = _available ?? throw new InvalidOperationException("请先检查更新。");
             Directory.CreateDirectory(_downloadRoot);
-            var installerPath = Path.Combine(_downloadRoot, $"XZhiYuan-Setup-{update.Version}-win-x64.exe");
+            var installerPath = Path.Combine(_downloadRoot, GetPackageName(update.Version));
             partialPath = installerPath + ".part";
 
             if (File.Exists(installerPath) && await VerifyFileAsync(installerPath, update.Sha256, cancellationToken))
@@ -192,6 +205,9 @@ public sealed class ReleaseUpdateService
 
     public Process LaunchInstaller(string installerPath)
     {
+        if (_target != ReleaseUpdateTarget.WindowsX64)
+            throw new PlatformNotSupportedException("macOS updates must be opened by the application host.");
+
         var fullPath = Path.GetFullPath(installerPath);
         var prefix = _downloadRoot.EndsWith(Path.DirectorySeparatorChar) ? _downloadRoot : _downloadRoot + Path.DirectorySeparatorChar;
         if (!fullPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || !File.Exists(fullPath))
@@ -265,6 +281,12 @@ public sealed class ReleaseUpdateService
 
     private static string EntryVersion() =>
         (Assembly.GetEntryAssembly()?.GetName().Version ?? Assembly.GetExecutingAssembly().GetName().Version ?? new Version()).ToString(3);
+
+    private string GetPackageName(string version) => _target switch
+    {
+        ReleaseUpdateTarget.MacOSArm64 => $"XZhiYuan-Setup-{version}-macos-arm64.dmg",
+        _ => $"XZhiYuan-Setup-{version}-win-x64.exe"
+    };
 
     private sealed record AvailableUpdate(string Version, string ReleaseUrl, string DownloadUrl, string Sha256, long Size);
 

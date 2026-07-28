@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net8.0": {
+      "themestudio.core": {
+        "type": "Project"
+      }
+    },
+    "net8.0/osx-arm64": {}
+  }
+}

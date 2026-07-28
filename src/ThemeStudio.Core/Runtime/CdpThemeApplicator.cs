@@ -14,6 +14,7 @@ public sealed class CdpThemeApplicator(CdpEndpointDiscovery discovery)
         ThemeDefinition theme,
         Func<string?, string?> assetPath,
         TimeSpan timeout,
+        bool includeWindowControlsBackdrop = true,
         CancellationToken cancellationToken = default)
     {
         var targets = await discovery.WaitForPageTargetsAsync(debugPort, timeout, cancellationToken);
@@ -47,7 +48,7 @@ public sealed class CdpThemeApplicator(CdpEndpointDiscovery discovery)
                 var mediaUrl = await _assets.UploadAsync(client, assetPath(theme.Media.AssetPath), cancellationToken);
                 var badgeUrl = await _assets.UploadAsync(client, assetPath(theme.Badge.AssetPath), cancellationToken);
                 var objectUrls = new[] { mediaUrl, badgeUrl }.Where(url => !string.IsNullOrWhiteSpace(url)).Cast<string>().ToArray();
-                var compiled = ThemeCompiler.Compile(theme, mediaUrl, badgeUrl, lastReport, objectUrls);
+                var compiled = ThemeCompiler.Compile(theme, mediaUrl, badgeUrl, lastReport, objectUrls, includeWindowControlsBackdrop);
                 suspended = compiled.SuspendedLayers;
                 await client.EvaluateAsync(compiled.Script, cancellationToken);
                 applied++;

@@ -9,6 +9,7 @@
   let requestNumber = 0;
 
   const state = {
+    platform: "windows",
     themes: [],
     settings: {},
     status: {},
@@ -29,14 +30,15 @@
     busyButton: null
   };
 
-  const bridgeAvailable = Boolean(window.chrome?.webview);
+  const nativeBridge = window.chrome?.webview || window.xzhiyuan;
+  const bridgeAvailable = Boolean(nativeBridge);
 
   function api(method, params = {}) {
     if (!bridgeAvailable) return mockApi(method, params);
     const id = `request-${Date.now()}-${++requestNumber}`;
     return new Promise((resolve, reject) => {
       pending.set(id, { resolve, reject });
-      window.chrome.webview.postMessage({ id, method, params });
+      nativeBridge.postMessage({ id, method, params });
       window.setTimeout(() => {
         const waiting = pending.get(id);
         if (!waiting) return;
@@ -47,8 +49,12 @@
   }
 
   if (bridgeAvailable) {
-    window.chrome.webview.addEventListener("message", event => {
+    nativeBridge.addEventListener("message", event => {
       const message = event.data;
+      if (message?.event === "fatalError") {
+        toast("工作台连接已断开", message.data?.message || "请重新打开 x纸鸢。", "error");
+        return;
+      }
       if (message?.event === "runtimeStatus") {
         state.status = message.data;
         renderStatus();
@@ -113,7 +119,7 @@
       { ...clone(sample), id: "paper-sky", name: "纸上晴空", mode: "standard", media: { ...sample.media, kind: "none" }, palette: { ...sample.palette, canvas: "#EAF2F3", surface: "#F8FBFA", elevated: "#FFFFFF", text: "#142023", mutedText: "#66777C", border: "#C5D3D6", accent: "#168DA3", accentText: "#FFFFFF" } },
       { ...clone(sample), id: "amber-library", name: "琥珀图书馆", media: { ...sample.media, kind: "none" }, palette: { ...sample.palette, canvas: "#17130E", surface: "#211A12", elevated: "#2A2117", text: "#F4EBDD", mutedText: "#BDAE99", border: "#493B2A", accent: "#D79A36", accentText: "#1B1207" } }
     ];
-    return { themes: variants.map(theme => ({ theme, mediaUrl: theme.id === "rain-archive" ? "../SeedAssets/rain-archive.png" : null, badgeUrl: "assets/x-zhiyuan-emblem.png" })), settings: { defaultThemeId: "rain-archive", brokerEnabled: false }, status: { state: "codexStopped", message: "Codex 已就绪", codexVersion: "26.721" }, update: { state: "idle", currentVersion: "0.1.17", latestVersion: null, updateAvailable: false, readyToInstall: false, progress: 0, message: "尚未检查更新" } };
+    return { platform: "windows", themes: variants.map(theme => ({ theme, mediaUrl: theme.id === "rain-archive" ? "../SeedAssets/rain-archive.png" : null, badgeUrl: "assets/x-zhiyuan-emblem.png" })), settings: { defaultThemeId: "rain-archive", brokerEnabled: false }, status: { state: "codexStopped", message: "Codex 已就绪", codexVersion: "26.721" }, update: { state: "idle", currentVersion: "0.1.17", latestVersion: null, updateAvailable: false, readyToInstall: false, progress: 0, message: "尚未检查更新" } };
   }
 
   async function initialize() {
@@ -131,6 +137,7 @@
   }
 
   function applyBootstrap(data) {
+    state.platform = data.platform || "windows";
     state.themes = data.themes || [];
     state.settings = data.settings || {};
     state.status = data.status || {};
@@ -1151,10 +1158,15 @@
       return;
     }
     if (status.state === "ready" || status.readyToInstall) {
-      state.update = { ...status, state: "installing", message: "正在启动安装程序" };
+      state.update = { ...status, state: "installing", message: state.platform === "macos" ? "正在打开安装包" : "正在启动安装程序" };
       renderUpdateStatus();
       try {
         await api("installUpdate");
+        if (state.platform === "macos") {
+          state.update = { ...status, state: "ready", message: "安装包已打开，请把 x纸鸢拖入“应用程序”文件夹。" };
+          renderUpdateStatus();
+          toast("安装包已打开", "把 x纸鸢拖入“应用程序”文件夹即可完成更新。", "success");
+        }
       } catch (error) {
         state.update = { ...status, state: "error", message: error.message };
         renderUpdateStatus();
@@ -1174,7 +1186,7 @@
     versionButton.classList.toggle("available", Boolean(status.updateAvailable));
     versionButton.classList.toggle("checking", status.state === "checking");
     chip.hidden = !status.updateAvailable && !status.readyToInstall;
-    $("span", chip).textContent = status.readyToInstall ? `安装 v${latest}` : `可更新 v${latest}`;
+    $("span", chip).textContent = status.readyToInstall && state.platform === "macos" ? `打开 v${latest}` : status.readyToInstall ? `安装 v${latest}` : `可更新 v${latest}`;
     setIcon(chip, status.readyToInstall ? "package-open" : "download");
 
     $("#update-current-version").textContent = `v${current}`;
@@ -1196,7 +1208,7 @@
     const labels = {
       idle: ["refresh-cw", "检查更新"], current: ["refresh-cw", "再次检查"], error: ["refresh-cw", "重新检查"],
       checking: ["loader-circle", "检查中"], available: ["download", "下载更新"], downloading: ["loader-circle", `下载 ${progress}%`],
-      ready: ["package-open", "立即安装"], installing: ["loader-circle", "正在启动"]
+      ready: ["package-open", state.platform === "macos" ? "打开安装包" : "立即安装"], installing: ["loader-circle", "正在启动"]
     };
     const [icon, label] = labels[actionState] || labels.idle;
     setIcon(action, icon);

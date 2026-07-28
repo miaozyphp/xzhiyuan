@@ -18,6 +18,9 @@ public sealed class CodexInstallLocator
 
     public CodexInstallation? Locate()
     {
+        if (!OperatingSystem.IsWindows())
+            return null;
+
         var candidates = new List<CodexInstallation>();
         using var packages = Registry.CurrentUser.OpenSubKey(PackagesRegistryPath);
         if (packages is null)

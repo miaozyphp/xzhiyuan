@@ -5,14 +5,15 @@ namespace ThemeStudio.Core.Runtime;
 
 public static class ThemeCompiler
 {
-    private const string RuntimeVersion = "1.0.7";
+    private const string RuntimeVersion = "1.1.0";
 
     public static CompiledTheme Compile(
         ThemeDefinition theme,
         string? mediaUrl,
         string? badgeUrl,
         CompatibilityReport report,
-        IReadOnlyList<string>? objectUrls = null)
+        IReadOnlyList<string>? objectUrls = null,
+        bool includeWindowControlsBackdrop = true)
     {
         var suspended = report.Layers.Where(layer => !layer.Supported).Select(layer => layer.Layer).ToArray();
         var config = new
@@ -20,6 +21,7 @@ public static class ThemeCompiler
             version = RuntimeVersion,
             themeId = theme.Id,
             objectUrls = objectUrls ?? [],
+            windowControlsBackdrop = includeWindowControlsBackdrop,
             mode = theme.Mode.ToString().ToLowerInvariant(),
             scheme = UsesLightColorScheme(theme.Palette.Canvas) ? "light" : "dark",
             palette = theme.Palette,
@@ -388,10 +390,12 @@ public static class ThemeCompiler
             attributeFilter: ['class', 'data-placeholder', 'aria-placeholder', 'aria-label', 'role', 'disabled', 'aria-disabled']
           });
 
-          const windowControlsBackdrop = add(document.createElement('div'));
-          windowControlsBackdrop.id = 'theme-studio-window-controls-backdrop';
-          windowControlsBackdrop.setAttribute('aria-hidden', 'true');
-          document.body.append(windowControlsBackdrop);
+          if (config.windowControlsBackdrop) {
+            const windowControlsBackdrop = add(document.createElement('div'));
+            windowControlsBackdrop.id = 'theme-studio-window-controls-backdrop';
+            windowControlsBackdrop.setAttribute('aria-hidden', 'true');
+            document.body.append(windowControlsBackdrop);
+          }
 
           if (config.layers.media && config.media.url && config.media.kind !== 'none') {
             const mediaRoot = add(document.createElement('div'));

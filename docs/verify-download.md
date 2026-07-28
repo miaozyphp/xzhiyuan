@@ -12,6 +12,13 @@ Get-FileHash .\XZhiYuan-*-win-x64-portable.zip -Algorithm SHA256
 Get-Content .\SHA256SUMS.txt
 ```
 
+macOS：
+
+```bash
+shasum -a 256 XZhiYuan-Setup-*-macos-arm64.dmg
+shasum -a 256 XZhiYuan-*-macos-arm64.zip
+```
+
 `Get-FileHash` 输出的哈希必须与 `SHA256SUMS.txt` 中对应文件名的值完全一致。不一致时不要运行文件，并通过仓库 Issue 报告。
 
 ## GitHub artifact attestation

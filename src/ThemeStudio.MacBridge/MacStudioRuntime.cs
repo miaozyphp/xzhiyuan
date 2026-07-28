@@ -3,21 +3,24 @@ using ThemeStudio.Core.Models;
 using ThemeStudio.Core.Runtime;
 using ThemeStudio.Core.Storage;
 
-namespace ThemeStudio.App.Services;
+namespace ThemeStudio.MacBridge;
 
-public sealed class StudioRuntime : IAsyncDisposable
+public sealed class MacStudioRuntime : IAsyncDisposable
 {
     private readonly ThemeRepository _repository;
-    private readonly LocalLog _log;
-    private readonly CodexInstallLocator _locator = new();
-    private readonly CodexLauncher _launcher = new();
+    private readonly MacLog _log;
+    private readonly MacCodexLocator _locator = new();
+    private readonly MacCodexLauncher _launcher = new();
     private readonly CdpEndpointDiscovery _discovery = new();
     private readonly CdpThemeApplicator _applicator;
-    private readonly CodexWindowChrome _windowChrome = new();
     private readonly SemaphoreSlim _operations = new(1, 1);
+    private readonly SemaphoreSlim _brokerGate = new(1, 1);
     private LoopbackAssetServer? _assets;
+    private bool _appliedForSession;
+    private bool _restartSpent;
+    private DateTimeOffset? _unmanagedSeenAt;
 
-    public StudioRuntime(ThemeRepository repository, LocalLog log)
+    public MacStudioRuntime(ThemeRepository repository, MacLog log)
     {
         _repository = repository;
         _log = log;
@@ -35,7 +38,6 @@ public sealed class StudioRuntime : IAsyncDisposable
     }
 
     public string? GetAssetUrl(string? path) => _assets?.GetAssetUrl(path);
-
     public CodexInstallation? LocateCodex() => _locator.Locate();
 
     public async Task<RuntimeStatus> RefreshStatusAsync(CancellationToken cancellationToken = default)
@@ -44,7 +46,7 @@ public sealed class StudioRuntime : IAsyncDisposable
         {
             var installation = _locator.Locate();
             if (installation is null)
-                return Update(new RuntimeStatus(RuntimeState.CodexNotFound, "未检测到 Codex，请先安装官方应用"));
+                return Update(new RuntimeStatus(RuntimeState.CodexNotFound, "未检测到 Codex，请先把 Codex.app 安装到“应用程序”文件夹。"));
 
             var settings = await _repository.GetSettingsAsync(cancellationToken);
             var targets = await _discovery.GetPageTargetsAsync(settings.DebugPort, cancellationToken);
@@ -68,9 +70,9 @@ public sealed class StudioRuntime : IAsyncDisposable
     public async Task<ThemeApplyResult> LaunchAndApplyAsync(string themeId, CancellationToken cancellationToken = default)
     {
         var theme = await _repository.GetAsync(themeId, cancellationToken);
-        if (theme is null)
-            return new ThemeApplyResult(false, "没有找到这个主题，请刷新主题图库。");
-        return await LaunchAndApplyAsync(theme, false, cancellationToken);
+        return theme is null
+            ? new ThemeApplyResult(false, "没有找到这个主题，请刷新主题库。")
+            : await LaunchAndApplyAsync(theme, false, cancellationToken);
     }
 
     public Task<ThemeApplyResult> LaunchAndApplyAsync(ThemeDefinition theme, CancellationToken cancellationToken = default) =>
@@ -84,12 +86,11 @@ public sealed class StudioRuntime : IAsyncDisposable
         await _operations.WaitAsync(cancellationToken);
         try
         {
-            _log.Info($"Theme apply requested: {theme.Id}; restartExisting={restartExisting}.");
             var installation = _locator.Locate();
             if (installation is null)
             {
-                Update(new RuntimeStatus(RuntimeState.CodexNotFound, "未检测到 Codex，请先安装官方应用"));
-                return new ThemeApplyResult(false, "未检测到 Codex，请先安装官方应用。");
+                Update(new RuntimeStatus(RuntimeState.CodexNotFound, "未检测到 Codex"));
+                return new ThemeApplyResult(false, "未检测到 Codex，请先安装官方应用。 ");
             }
 
             var settings = await _repository.GetSettingsAsync(cancellationToken);
@@ -106,13 +107,8 @@ public sealed class StudioRuntime : IAsyncDisposable
                     }
 
                     Update(new RuntimeStatus(RuntimeState.Launching, "正在重新连接 Codex", installation.Version));
-                    var stopped = await _launcher.StopForManagedRestartAsync(running, cancellationToken);
-                    if (!stopped)
-                    {
-                        Update(new RuntimeStatus(RuntimeState.NativeOnly, "Codex 没有完全退出，已取消重新连接", installation.Version));
-                        return new ThemeApplyResult(false, "Codex 没有完全退出。为了避免重复启动，本次没有继续应用皮肤。");
-                    }
-                    _log.Info("Codex exact-process restart stop completed.");
+                    if (!await _launcher.StopForManagedRestartAsync(running, cancellationToken))
+                        return new ThemeApplyResult(false, "Codex 没有完全退出，本次没有继续应用皮肤。 ");
                 }
 
                 Update(new RuntimeStatus(RuntimeState.Launching, "正在打开 Codex", installation.Version));
@@ -125,39 +121,23 @@ public sealed class StudioRuntime : IAsyncDisposable
                 theme,
                 ResolveAssetPath,
                 TimeSpan.FromSeconds(20),
+                includeWindowControlsBackdrop: false,
                 cancellationToken: cancellationToken);
-
-            if (result.Success)
-            {
-                var darkWindowChrome = !ThemeCompiler.UsesLightColorScheme(theme.Palette.Canvas);
-                var chromeWindows = _windowChrome.Apply(_launcher.FindRunning(installation), darkWindowChrome);
-                _log.Info($"Codex window controls updated: dark={darkWindowChrome}; windows={chromeWindows}.");
-            }
-
             Update(result.Success
                 ? new RuntimeStatus(RuntimeState.Applied, result.Message, installation.Version, theme.Id)
                 : new RuntimeStatus(RuntimeState.NativeOnly, result.Message, installation.Version));
-            _log.Info($"Theme apply completed: success={result.Success}; suspended={string.Join(',', result.SuspendedLayers ?? [])}.");
             return result;
         }
         catch (Exception error)
         {
             _log.Error("Theme application failed.", error);
             Update(new RuntimeStatus(RuntimeState.Faulted, "皮肤应用失败，Codex 已保持原生界面"));
-            return new ThemeApplyResult(false, "皮肤应用失败，Codex 已保持原生界面。请稍后重试。");
+            return new ThemeApplyResult(false, "皮肤没有应用成功，Codex 已保持原生界面，请稍后重试。 ");
         }
         finally
         {
             _operations.Release();
         }
-    }
-
-    private string? ResolveAssetPath(string? relativePath)
-    {
-        if (string.IsNullOrWhiteSpace(relativePath))
-            return null;
-        var path = _repository.ResolveAssetPath(relativePath);
-        return File.Exists(path) ? path : null;
     }
 
     public async Task<ThemeApplyResult> ApplyDefaultAsync(CancellationToken cancellationToken = default)
@@ -170,23 +150,71 @@ public sealed class StudioRuntime : IAsyncDisposable
     {
         var settings = await _repository.GetSettingsAsync(cancellationToken);
         await _applicator.RemoveAsync(settings.DebugPort, cancellationToken);
-        var installation = _locator.Locate();
-        if (installation is not null)
-            _windowChrome.Restore(_launcher.FindRunning(installation));
         Update(new RuntimeStatus(RuntimeState.Idle, "皮肤已卸下，Codex 保持运行"));
+    }
+
+    public async Task BrokerTickAsync(CancellationToken cancellationToken = default)
+    {
+        if (!await _brokerGate.WaitAsync(0, cancellationToken))
+            return;
+        try
+        {
+            var settings = await _repository.GetSettingsAsync(cancellationToken);
+            if (!settings.BrokerEnabled)
+                return;
+            var installation = _locator.Locate();
+            if (installation is null)
+                return;
+            var running = _launcher.FindRunning(installation);
+            if (running.Count == 0)
+            {
+                _appliedForSession = false;
+                _restartSpent = false;
+                _unmanagedSeenAt = null;
+                return;
+            }
+
+            var status = await RefreshStatusAsync(cancellationToken);
+            if (status.State is RuntimeState.Idle or RuntimeState.Applied)
+            {
+                _unmanagedSeenAt = null;
+                if (!_appliedForSession)
+                    _appliedForSession = (await ApplyDefaultAsync(cancellationToken)).Success;
+                return;
+            }
+
+            if (!settings.RestartUnmanagedCodex || _restartSpent)
+                return;
+            _unmanagedSeenAt ??= DateTimeOffset.UtcNow;
+            if (DateTimeOffset.UtcNow - _unmanagedSeenAt < TimeSpan.FromSeconds(2.5))
+                return;
+            _restartSpent = true;
+            if (await _launcher.StopForManagedRestartAsync(running, cancellationToken))
+                _appliedForSession = (await ApplyDefaultAsync(cancellationToken)).Success;
+        }
+        catch (Exception error)
+        {
+            _log.Error("Broker tick failed.", error);
+        }
+        finally
+        {
+            _brokerGate.Release();
+        }
+    }
+
+    private string? ResolveAssetPath(string? relativePath)
+    {
+        if (string.IsNullOrWhiteSpace(relativePath))
+            return null;
+        var path = _repository.ResolveAssetPath(relativePath);
+        return File.Exists(path) ? path : null;
     }
 
     private RuntimeStatus Update(RuntimeStatus status)
     {
         Status = status;
-        try
-        {
-            StatusChanged?.Invoke(this, status);
-        }
-        catch (Exception error)
-        {
-            _log.Error("Runtime status subscriber failed.", error);
-        }
+        try { StatusChanged?.Invoke(this, status); }
+        catch (Exception error) { _log.Error("Runtime status subscriber failed.", error); }
         return status;
     }
 
@@ -195,5 +223,6 @@ public sealed class StudioRuntime : IAsyncDisposable
         if (_assets is not null)
             await _assets.DisposeAsync();
         _operations.Dispose();
+        _brokerGate.Dispose();
     }
 }
