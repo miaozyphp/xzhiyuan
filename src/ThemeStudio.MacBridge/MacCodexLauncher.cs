@@ -49,13 +49,9 @@ public sealed partial class MacCodexLauncher
         if (await WaitForAllAsync(processes, TimeSpan.FromSeconds(5), cancellationToken))
             return true;
 
-        foreach (var process in processes)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            try { if (!process.HasExited) process.Kill(false); }
-            catch (InvalidOperationException) { }
-        }
-        return await WaitForAllAsync(processes, TimeSpan.FromSeconds(4), cancellationToken);
+        // Theme application never force-quits Codex. Keep the native session
+        // running when the application declines the normal quit request.
+        return false;
     }
 
     private static IReadOnlyList<string> ReadProcessList()

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Drawing;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
@@ -57,7 +58,7 @@ public sealed class MainWindow : Form
     {
         var menu = new ContextMenuStrip();
         menu.Items.Add("打开 x纸鸢", null, (_, _) => RestoreWindow());
-        menu.Items.Add("启动 Codex", null, async (_, _) => await _runtime.ApplyDefaultAsync());
+        menu.Items.Add("启动 Codex", null, async (_, _) => await LaunchCodexFromTrayAsync());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("退出 x纸鸢", null, (_, _) =>
         {
@@ -97,6 +98,7 @@ public sealed class MainWindow : Form
                 CoreWebView2HostResourceAccessKind.DenyCors);
             core.WebMessageReceived += OnWebMessageReceived;
             core.NewWindowRequested += OnNewWindowRequested;
+            core.ProcessFailed += OnWebViewProcessFailed;
             core.NavigationCompleted += (_, eventArgs) =>
             {
                 _webReady = eventArgs.IsSuccess;
@@ -216,9 +218,12 @@ public sealed class MainWindow : Form
 
     private void RestoreWindow()
     {
+        try { _webView.CoreWebView2?.Resume(); }
+        catch (InvalidOperationException) { }
         Show();
         WindowState = FormWindowState.Normal;
         Activate();
+        _ = SetWorkbenchVisibleAsync(true);
     }
 
     private void OnFormClosing(object? sender, FormClosingEventArgs eventArgs)
@@ -228,6 +233,59 @@ public sealed class MainWindow : Form
             eventArgs.Cancel = true;
             Hide();
             _tray.Visible = true;
+            _ = SuspendWorkbenchAsync();
+        }
+    }
+
+    private async Task LaunchCodexFromTrayAsync()
+    {
+        try
+        {
+            var result = await _runtime.ApplyDefaultAsync();
+            if (!result.Success)
+                _tray.ShowBalloonTip(5000, "Codex 未连接皮肤", result.Message, ToolTipIcon.Info);
+        }
+        catch (Exception error)
+        {
+            _log.Error("Tray launch failed.", error);
+            _tray.ShowBalloonTip(5000, "启动没有完成", "请打开 x纸鸢查看详细状态。", ToolTipIcon.Error);
+        }
+    }
+
+    private async Task SuspendWorkbenchAsync()
+    {
+        await SetWorkbenchVisibleAsync(false);
+        try
+        {
+            if (_webView.CoreWebView2 is not null)
+                await _webView.CoreWebView2.TrySuspendAsync();
+        }
+        catch (Exception error) when (error is InvalidOperationException or COMException)
+        {
+            _log.Error("Workbench suspension failed.", error);
+        }
+    }
+
+    private async Task SetWorkbenchVisibleAsync(bool visible)
+    {
+        try
+        {
+            if (_webReady && _webView.CoreWebView2 is not null)
+                await _webView.CoreWebView2.ExecuteScriptAsync($"window.xzhiyuanSetVisible?.({visible.ToString().ToLowerInvariant()}); true;");
+        }
+        catch (Exception error) when (error is InvalidOperationException or COMException)
+        {
+            _log.Error("Workbench visibility update failed.", error);
+        }
+    }
+
+    private void OnWebViewProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs eventArgs)
+    {
+        _log.Error($"WebView2 process failed: {eventArgs.ProcessFailedKind}; reason={eventArgs.Reason}; exit={eventArgs.ExitCode}.");
+        if (eventArgs.ProcessFailedKind is CoreWebView2ProcessFailedKind.RenderProcessExited or CoreWebView2ProcessFailedKind.RenderProcessUnresponsive)
+        {
+            try { BeginInvoke(() => _webView.CoreWebView2?.Reload()); }
+            catch (InvalidOperationException) { }
         }
     }
 

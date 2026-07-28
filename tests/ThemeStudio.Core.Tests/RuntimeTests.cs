@@ -57,6 +57,14 @@ public sealed class RuntimeTests
     }
 
     [Fact]
+    public void AuxiliaryCodexTargetsAreNotConsideredConnected()
+    {
+        var auxiliary = new CdpTarget("2", "page", "Codex", "app://-/index.html?initialRoute=%2Favatar-overlay", "ws://127.0.0.1/avatar");
+
+        Assert.False(CdpThemeApplicator.IsPrimaryCodexTarget(auxiliary));
+    }
+
+    [Fact]
     public void RuntimeAssetsUseCspCompatibleBlobUrls()
     {
         var theme = ThemeValidatorTests.CreateTheme();
@@ -84,7 +92,7 @@ public sealed class RuntimeTests
         Assert.Contains("body > #root", compiled.Script);
         Assert.DoesNotContain("body > :not(#theme-studio-media)", compiled.Script);
         Assert.Contains("theme-studio-window-controls-backdrop", compiled.Script);
-        Assert.Contains("textObserver.disconnect", compiled.Script);
+        Assert.Contains("textObserver?.disconnect", compiled.Script);
         Assert.Contains("removeAttribute('data-theme-studio-tone')", ThemeCompiler.CreateRemoveScript());
         Assert.DoesNotContain("button, [role='button'], input", compiled.Script);
         Assert.Equal("video/mp4", CdpAssetTransport.GetContentType("wallpaper.mp4"));
@@ -92,14 +100,13 @@ public sealed class RuntimeTests
     }
 
     [Fact]
-    public void BrokerHasOneRestartBudgetPerSession()
+    public void BrokerAlwaysLeavesUnmanagedCodexNative()
     {
-        var broker = new BrokerStateMachine(true);
+        var broker = new BrokerStateMachine();
 
-        Assert.Equal(BrokerAction.RestartManagedOnce, broker.Observe(BrokerObservation.UnmanagedCodex));
         Assert.Equal(BrokerAction.LeaveNative, broker.Observe(BrokerObservation.UnmanagedCodex));
         broker.ResetSession();
-        Assert.Equal(BrokerAction.RestartManagedOnce, broker.Observe(BrokerObservation.UnmanagedCodex));
+        Assert.Equal(BrokerAction.LeaveNative, broker.Observe(BrokerObservation.UnmanagedCodex));
     }
 
     [Fact]
@@ -109,6 +116,46 @@ public sealed class RuntimeTests
         Assert.Equal(0, new CodexWindowChrome().Apply([], true));
         Assert.True(ThemeCompiler.UsesLightColorScheme("#FFFFFF"));
         Assert.False(ThemeCompiler.UsesLightColorScheme("#101820"));
+    }
+
+    [Fact]
+    public void SafeModeDisablesVideoAndDynamicLayers()
+    {
+        var theme = ThemeValidatorTests.CreateTheme() with
+        {
+            Mode = ThemeMode.Deep,
+            Media = new ThemeMedia { Kind = MediaKind.Video, AssetPath = "assets/video.mp4" }
+        };
+
+        var safe = ThemeSafetyProfile.Apply(theme, true);
+
+        Assert.Equal(ThemeMode.Standard, safe.Mode);
+        Assert.Equal(MediaKind.None, safe.Media.Kind);
+        Assert.Null(safe.Media.AssetPath);
+        Assert.False(safe.Layers.Components);
+        Assert.False(safe.Layers.Hero);
+        Assert.False(safe.Layers.Suggestions);
+        Assert.False(safe.Layers.HomeLayout);
+    }
+
+    [Fact]
+    public void CompilerOmitsDynamicObserverWhenComponentsAreDisabled()
+    {
+        var theme = ThemeValidatorTests.CreateTheme() with { Layers = new ThemeLayers { Components = false } };
+        var report = new CompatibilityReport(true, [], []);
+        var compiled = ThemeCompiler.Compile(theme, null, null, report);
+
+        Assert.Contains("if (config.layers.components)", compiled.Script);
+        Assert.Contains("textObserver?.disconnect()", compiled.Script);
+    }
+
+    [Fact]
+    public void MediaPolicyUsesSeparateImageAndVideoLimits()
+    {
+        Assert.Equal(32L * 1024 * 1024, ThemeMediaPolicy.MaximumBytes(".png"));
+        Assert.Equal(64L * 1024 * 1024, ThemeMediaPolicy.MaximumBytes(".mp4"));
+        Assert.Throws<InvalidDataException>(() => ThemeMediaPolicy.ValidateLength(".png", 32L * 1024 * 1024 + 1));
+        Assert.Throws<InvalidDataException>(() => ThemeMediaPolicy.ValidateLength(".mp4", 64L * 1024 * 1024 + 1));
     }
 
     [Fact]

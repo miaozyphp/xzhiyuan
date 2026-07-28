@@ -10,12 +10,12 @@ internal static class Program
     private static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
-        var configuredRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ThemeStudioForCodex");
-        var root = ThemeDataRoot.Resolve(configuredRoot);
-
-        using var log = new LocalLog(Path.Combine(root, "theme-studio.log"));
+        LocalLog? log = null;
         try
         {
+            var configuredRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ThemeStudioForCodex");
+            var root = ThemeDataRoot.Resolve(configuredRoot);
+            log = new LocalLog(Path.Combine(root, "theme-studio.log"));
             log.Info("Application startup begin.");
             if (!string.Equals(configuredRoot, root, StringComparison.OrdinalIgnoreCase))
                 log.Info($"Theme data directory resolved to redirected storage: {root}");
@@ -67,12 +67,16 @@ internal static class Program
         }
         catch (Exception error)
         {
-            log.Error("Application startup failed.", error);
+            log?.Error("Application startup failed.", error);
             MessageBox.Show(
                 "主题工作台未能启动。请重新安装，或查看本地日志。\r\n\r\n" + error.Message,
                 "x纸鸢",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
+        }
+        finally
+        {
+            log?.Dispose();
         }
     }
 }

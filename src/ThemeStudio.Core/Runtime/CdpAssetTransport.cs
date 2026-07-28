@@ -1,12 +1,12 @@
 using System.Text.Json;
 using ThemeStudio.Core.Codex;
+using ThemeStudio.Core.Storage;
 
 namespace ThemeStudio.Core.Runtime;
 
 public sealed class CdpAssetTransport
 {
-    private const int ChunkSize = 256 * 1024;
-    private const long MaximumAssetBytes = 256L * 1024 * 1024;
+    private const int ChunkSize = 128 * 1024;
 
     public async Task<string?> UploadAsync(CdpClient client, string? filePath, CancellationToken cancellationToken = default)
     {
@@ -14,12 +14,11 @@ public sealed class CdpAssetTransport
             return null;
 
         var info = new FileInfo(filePath);
-        if (info.Length > MaximumAssetBytes)
-            throw new InvalidDataException("Theme media exceeds the 256 MB runtime limit.");
+        ThemeMediaPolicy.ValidateLength(info.Extension, info.Length);
 
         var transferId = $"asset_{Guid.NewGuid():N}";
         var idJson = JsonSerializer.Serialize(transferId);
-        await client.EvaluateAsync($"window.__themeStudioTransfers ??= Object.create(null); window.__themeStudioTransfers[{idJson}] = []; true;", cancellationToken);
+        await client.EvaluateAsync($"window.__themeStudioTransfers ??= Object.create(null); window.__themeStudioTransfers[{idJson}] = {{ parts: [], bytes: 0 }}; true;", cancellationToken);
 
         try
         {
@@ -31,22 +30,30 @@ public sealed class CdpAssetTransport
                 if (read == 0)
                     break;
                 var chunkJson = JsonSerializer.Serialize(Convert.ToBase64String(buffer, 0, read));
-                await client.EvaluateAsync($"window.__themeStudioTransfers[{idJson}].push({chunkJson}); true;", cancellationToken);
+                await client.EvaluateAsync(
+                    $$"""
+                    (() => {
+                      const transfer = window.__themeStudioTransfers[{{idJson}}];
+                      if (!transfer) throw new Error('Theme media transfer was cancelled.');
+                      const binary = atob({{chunkJson}});
+                      const bytes = new Uint8Array(binary.length);
+                      for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+                      transfer.parts.push(bytes);
+                      transfer.bytes += bytes.length;
+                      return true;
+                    })()
+                    """,
+                    cancellationToken);
             }
 
             var mimeJson = JsonSerializer.Serialize(GetContentType(filePath));
             var result = await client.EvaluateAsync(
                 $$"""
                 (() => {
-                  const chunks = window.__themeStudioTransfers[{{idJson}}] || [];
-                  const parts = chunks.map(chunk => {
-                    const binary = atob(chunk);
-                    const bytes = new Uint8Array(binary.length);
-                    for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
-                    return bytes;
-                  });
+                  const transfer = window.__themeStudioTransfers[{{idJson}}];
                   delete window.__themeStudioTransfers[{{idJson}}];
-                  return URL.createObjectURL(new Blob(parts, { type: {{mimeJson}} }));
+                  if (!transfer) throw new Error('Theme media transfer was cancelled.');
+                  return URL.createObjectURL(new Blob(transfer.parts, { type: {{mimeJson}} }));
                 })()
                 """,
                 cancellationToken);

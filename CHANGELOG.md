@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.20 - 2026-07-29
+
+- 禁止后台代理自动关闭或强制结束普通启动的 Codex。
+- 使用打包应用激活方式启动 Codex，主题模式失败时恢复普通 Codex。
+- 增加安全模式、媒体大小策略、分片 Blob 传输、失败清理和诊断包导出。
+- 隐藏工作台时暂停 WebView 与视频，Codex 渲染进程异常时自动恢复。
+- 将动态文字扫描改为空闲分片执行，并补充 39 个核心测试。
+
 All notable changes to x纸鸢 are documented here.
 
 ## Unreleased

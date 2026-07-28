@@ -104,6 +104,7 @@ public sealed record StudioSettings
     public string DefaultThemeId { get; init; } = "rain-archive";
     public bool BrokerEnabled { get; init; }
     public bool RestartUnmanagedCodex { get; init; }
+    public bool SafeMode { get; init; }
     public int DebugPort { get; init; } = 9229;
     public int BadgeBrandingVersion { get; init; }
 }

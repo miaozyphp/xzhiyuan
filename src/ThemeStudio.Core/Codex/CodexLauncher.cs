@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace ThemeStudio.Core.Codex;
 
@@ -11,15 +12,32 @@ public sealed class CodexLauncher
         if (debugPort is < 1024 or > 65535)
             throw new ArgumentOutOfRangeException(nameof(debugPort));
 
-        var startInfo = new ProcessStartInfo
+        var arguments = $"--remote-debugging-address=127.0.0.1 --remote-debugging-port={debugPort}";
+        var activationError = TryActivatePackagedApplication(installation, arguments, out var activatedProcess);
+        if (activationError is null && activatedProcess is not null)
+            return activatedProcess;
+
+        try
         {
-            FileName = installation.ExecutablePath,
-            Arguments = $"--remote-debugging-address=127.0.0.1 --remote-debugging-port={debugPort}",
-            WorkingDirectory = Path.GetDirectoryName(installation.ExecutablePath)!,
-            UseShellExecute = false
-        };
-        startInfo.Environment["THEME_STUDIO_MANAGED_LAUNCH"] = "1";
-        return Process.Start(startInfo) ?? throw new InvalidOperationException("Codex process could not be started.");
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = installation.ExecutablePath,
+                Arguments = arguments,
+                WorkingDirectory = Path.GetDirectoryName(installation.ExecutablePath)!,
+                UseShellExecute = true
+            };
+            return Process.Start(startInfo) ?? throw new InvalidOperationException("Codex process could not be started.");
+        }
+        catch (Exception managedError) when (managedError is InvalidOperationException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            var fallbackError = TryActivatePackagedApplication(installation, string.Empty, out _);
+            throw new CodexLaunchException(
+                fallbackError is null
+                    ? "Codex 无法建立主题连接，已恢复为普通启动。"
+                    : "Codex 无法建立主题连接，也没有成功恢复普通启动。",
+                fallbackError is null,
+                new AggregateException(new[] { activationError, managedError, fallbackError }.Where(error => error is not null).Cast<Exception>()));
+        }
     }
 
     public IReadOnlyList<Process> FindRunning(CodexInstallation installation)
@@ -46,25 +64,37 @@ public sealed class CodexLauncher
             }
             catch
             {
-                // Fall through to exact-process termination after the graceful close window.
+                // A failed graceful close is reported to the caller below.
             }
 
-            foreach (var process in processes)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                try
-                {
-                    if (!process.HasExited)
-                        process.Kill(KillEntireProcessTree);
-                }
-                catch (InvalidOperationException)
-                {
-                    // The process exited between the snapshot and this loop.
-                }
-            }
-
-            return WaitForAll(processes, TimeSpan.FromSeconds(4), cancellationToken);
+            // A theme operation must never force-terminate Codex. If graceful
+            // shutdown is refused, the caller leaves the native session intact.
+            return false;
         }, cancellationToken);
+    }
+
+    private static Exception? TryActivatePackagedApplication(
+        CodexInstallation installation,
+        string arguments,
+        out Process? process)
+    {
+        process = null;
+        if (!OperatingSystem.IsWindows())
+            return new PlatformNotSupportedException();
+
+        try
+        {
+            var manager = (IApplicationActivationManager)new ApplicationActivationManager();
+            var appUserModelId = $"{installation.PackageFamilyName}!{installation.ApplicationId}";
+            var result = manager.ActivateApplication(appUserModelId, arguments, ActivateOptions.None, out var processId);
+            Marshal.ThrowExceptionForHR(result);
+            process = Process.GetProcessById(checked((int)processId));
+            return null;
+        }
+        catch (Exception error) when (error is COMException or ExternalException or InvalidCastException or InvalidOperationException or ArgumentException or UnauthorizedAccessException)
+        {
+            return error;
+        }
     }
 
     private static bool MatchesExecutable(Process process, string expectedPath)
@@ -97,4 +127,41 @@ public sealed class CodexLauncher
         try { return process.HasExited; }
         catch (InvalidOperationException) { return true; }
     }
+}
+
+public sealed class CodexLaunchException(string message, bool nativeFallbackStarted, Exception innerException)
+    : InvalidOperationException(message, innerException)
+{
+    public bool NativeFallbackStarted { get; } = nativeFallbackStarted;
+}
+
+[Flags]
+internal enum ActivateOptions
+{
+    None = 0
+}
+
+[ComImport]
+[Guid("2E941141-7F97-4756-BA1D-9DECDE894A3D")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IApplicationActivationManager
+{
+    [PreserveSig]
+    int ActivateApplication(
+        [MarshalAs(UnmanagedType.LPWStr)] string appUserModelId,
+        [MarshalAs(UnmanagedType.LPWStr)] string arguments,
+        ActivateOptions options,
+        out uint processId);
+
+    [PreserveSig]
+    int ActivateForFile(IntPtr appUserModelId, IntPtr itemArray, IntPtr verb, out uint processId);
+
+    [PreserveSig]
+    int ActivateForProtocol(IntPtr appUserModelId, IntPtr itemArray, out uint processId);
+}
+
+[ComImport]
+[Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C")]
+internal class ApplicationActivationManager
+{
 }

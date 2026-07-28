@@ -11,7 +11,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ThemeStudio.MacBridge</AssemblyName>
     <Product>x纸鸢</Product>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <RuntimeIdentifiers>osx-arm64</RuntimeIdentifiers>
   </PropertyGroup>
 

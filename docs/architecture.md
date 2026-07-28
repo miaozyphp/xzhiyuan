@@ -40,9 +40,11 @@ The saved theme mode and other layers remain unchanged.
 
 CDP injection is reversible and never modifies installed Codex files. The
 workbench can launch Codex with a local debugging port. The optional broker
-watches direct launches and applies the selected default theme when CDP is
-available. Restarting an unmanaged Codex launch is disabled by default and has
-a hard one-restart budget when explicitly enabled.
+watches launches and applies the selected default theme only when CDP is
+available. A native Codex launch is always left running unchanged. Explicit
+reconnection requests only use graceful shutdown; x纸鸢 never force-terminates
+Codex.
 
 Any launch or verification failure ends in a native, still-running Codex window
-plus a diagnostic. Theme failure is never a reason to terminate Codex.
+plus a diagnostic whenever possible. Theme failure is never a reason to
+terminate Codex.

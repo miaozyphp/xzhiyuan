@@ -7,6 +7,7 @@ namespace ThemeStudio.App.Services;
 
 public sealed class AppController(ThemeRepository repository, StudioRuntime runtime, ReleaseUpdateService updates)
 {
+    private readonly ThemeDiagnosticService diagnostics = new(repository);
     private readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true
@@ -28,6 +29,8 @@ public sealed class AppController(ThemeRepository repository, StudioRuntime runt
         "deleteThemes" => await DeleteThemesAsync(parameters, cancellationToken),
         "setDefaultTheme" => await SetDefaultThemeAsync(parameters, cancellationToken),
         "setAutoApply" => await SetAutoApplyAsync(parameters, cancellationToken),
+        "setSafeMode" => await SetSafeModeAsync(parameters, cancellationToken),
+        "exportDiagnostics" => await ExportDiagnosticsAsync(cancellationToken),
         "applyTheme" => await ApplyThemeAsync(parameters, cancellationToken),
         "restartAndApply" => await RestartAndApplyAsync(parameters, cancellationToken),
         "launchCodex" => await runtime.ApplyDefaultAsync(cancellationToken),
@@ -98,15 +101,14 @@ public sealed class AppController(ThemeRepository repository, StudioRuntime runt
             !dataUrl[..separator].Contains(";base64", StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("Dropped media data is invalid.");
 
-        const int maxDroppedMediaBytes = 80 * 1024 * 1024;
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        var maxDroppedMediaBytes = ThemeMediaPolicy.MaximumBytes(extension);
         var encodedLength = dataUrl.Length - separator - 1;
         if (encodedLength > ((maxDroppedMediaBytes + 2) / 3) * 4 + 4)
-            throw new InvalidDataException("Dropped media must be 80 MB or smaller.");
+            throw new InvalidDataException($"媒体文件不能超过 {maxDroppedMediaBytes / 1024 / 1024} MB。");
         var bytes = Convert.FromBase64String(dataUrl[(separator + 1)..]);
-        if (bytes.Length > maxDroppedMediaBytes)
-            throw new InvalidDataException("Dropped media must be 80 MB or smaller.");
+        ThemeMediaPolicy.ValidateLength(extension, bytes.Length);
 
-        var extension = Path.GetExtension(fileName).ToLowerInvariant();
         var mediaKind = extension is ".mp4" or ".webm" or ".mov" ? MediaKind.Video : MediaKind.Image;
         var name = parameters.TryGetProperty("name", out var nameValue)
             ? nameValue.GetString()
@@ -187,11 +189,23 @@ public sealed class AppController(ThemeRepository repository, StudioRuntime runt
     {
         var enabled = parameters.GetProperty("enabled").GetBoolean();
         var settings = await repository.GetSettingsAsync(cancellationToken);
-        var updated = settings with { BrokerEnabled = enabled, RestartUnmanagedCodex = enabled };
+        var updated = settings with { BrokerEnabled = enabled, RestartUnmanagedCodex = false };
         await repository.SaveSettingsAsync(updated, cancellationToken);
         BrokerRegistration.SetEnabled(enabled);
         return updated;
     }
+
+    private async Task<object> SetSafeModeAsync(JsonElement parameters, CancellationToken cancellationToken)
+    {
+        var enabled = parameters.GetProperty("enabled").GetBoolean();
+        var settings = await repository.GetSettingsAsync(cancellationToken);
+        var updated = settings with { SafeMode = enabled };
+        await repository.SaveSettingsAsync(updated, cancellationToken);
+        return updated;
+    }
+
+    private async Task<object> ExportDiagnosticsAsync(CancellationToken cancellationToken) =>
+        new { path = await diagnostics.CreateAsync(runtime.Status, cancellationToken) };
 
     private async Task<object> ApplyThemeAsync(JsonElement parameters, CancellationToken cancellationToken)
     {

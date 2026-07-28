@@ -35,26 +35,40 @@ public sealed class CdpThemeApplicator(CdpEndpointDiscovery discovery)
 
         foreach (var target in primaryTargets)
         {
+            await using var client = new CdpClient();
+            var pendingObjectUrls = new List<string>();
             try
             {
-                await using var client = new CdpClient();
                 await client.ConnectAsync(target.WebSocketDebuggerUrl, cancellationToken);
-                await client.EvaluateAsync(ThemeCompiler.CreateRemoveScript(), cancellationToken);
                 var snapshotJson = await client.EvaluateAsync(CompatibilityContract.CreateProbeScript(), cancellationToken);
                 var snapshot = snapshotJson is null
                     ? new DomSnapshot(new Dictionary<string, int>(), [], 0, 0)
                     : JsonSerializer.Deserialize<DomSnapshot>(snapshotJson, _json) ?? new DomSnapshot(new Dictionary<string, int>(), [], 0, 0);
                 lastReport = CompatibilityContract.Evaluate(theme, snapshot);
                 var mediaUrl = await _assets.UploadAsync(client, assetPath(theme.Media.AssetPath), cancellationToken);
+                if (!string.IsNullOrWhiteSpace(mediaUrl))
+                    pendingObjectUrls.Add(mediaUrl);
                 var badgeUrl = await _assets.UploadAsync(client, assetPath(theme.Badge.AssetPath), cancellationToken);
-                var objectUrls = new[] { mediaUrl, badgeUrl }.Where(url => !string.IsNullOrWhiteSpace(url)).Cast<string>().ToArray();
+                if (!string.IsNullOrWhiteSpace(badgeUrl))
+                    pendingObjectUrls.Add(badgeUrl);
+                var objectUrls = pendingObjectUrls.ToArray();
                 var compiled = ThemeCompiler.Compile(theme, mediaUrl, badgeUrl, lastReport, objectUrls, includeWindowControlsBackdrop);
                 suspended = compiled.SuspendedLayers;
                 await client.EvaluateAsync(compiled.Script, cancellationToken);
+                pendingObjectUrls.Clear();
                 applied++;
             }
             catch (Exception error)
             {
+                if (pendingObjectUrls.Count > 0)
+                {
+                    var urlsJson = JsonSerializer.Serialize(pendingObjectUrls);
+                    try
+                    {
+                        await client.EvaluateAsync($"for (const url of {urlsJson}) {{ try {{ URL.revokeObjectURL(url); }} catch {{}} }} true;", CancellationToken.None);
+                    }
+                    catch { }
+                }
                 failures.Add(error.Message);
             }
         }

@@ -19,10 +19,8 @@ public enum BrokerAction
     ReportFailure
 }
 
-public sealed class BrokerStateMachine(bool restartUnmanagedCodex)
+public sealed class BrokerStateMachine
 {
-    private bool _restartSpent;
-
     public BrokerAction Observe(BrokerObservation observation) => observation switch
     {
         BrokerObservation.NoCodex => BrokerAction.Wait,
@@ -30,16 +28,9 @@ public sealed class BrokerStateMachine(bool restartUnmanagedCodex)
         BrokerObservation.CdpReady => BrokerAction.ApplyTheme,
         BrokerObservation.ApplySucceeded => BrokerAction.Wait,
         BrokerObservation.ApplyFailed => BrokerAction.ReportFailure,
-        BrokerObservation.UnmanagedCodex when restartUnmanagedCodex && !_restartSpent => SpendRestart(),
         BrokerObservation.UnmanagedCodex => BrokerAction.LeaveNative,
         _ => BrokerAction.Wait
     };
 
-    public void ResetSession() => _restartSpent = false;
-
-    private BrokerAction SpendRestart()
-    {
-        _restartSpent = true;
-        return BrokerAction.RestartManagedOnce;
-    }
+    public void ResetSession() { }
 }

@@ -48,7 +48,7 @@ public sealed class StudioRuntime : IAsyncDisposable
 
             var settings = await _repository.GetSettingsAsync(cancellationToken);
             var targets = await _discovery.GetPageTargetsAsync(settings.DebugPort, cancellationToken);
-            if (targets.Count > 0)
+            if (targets.Any(CdpThemeApplicator.IsPrimaryCodexTarget))
                 return Update(new RuntimeStatus(RuntimeState.Idle, "Codex 已连接", installation.Version, Status.AppliedThemeId));
 
             var running = _launcher.FindRunning(installation).Count > 0;
@@ -93,6 +93,7 @@ public sealed class StudioRuntime : IAsyncDisposable
             }
 
             var settings = await _repository.GetSettingsAsync(cancellationToken);
+            var effectiveTheme = ThemeSafetyProfile.Apply(theme, settings.SafeMode);
             var targets = await _discovery.GetPageTargetsAsync(settings.DebugPort, cancellationToken);
             if (targets.Count == 0)
             {
@@ -116,20 +117,32 @@ public sealed class StudioRuntime : IAsyncDisposable
                 }
 
                 Update(new RuntimeStatus(RuntimeState.Launching, "正在打开 Codex", installation.Version));
-                _launcher.Launch(installation, settings.DebugPort);
+                try
+                {
+                    _launcher.Launch(installation, settings.DebugPort);
+                }
+                catch (CodexLaunchException error)
+                {
+                    _log.Error("Managed Codex launch failed.", error);
+                    var message = error.NativeFallbackStarted
+                        ? "Codex 已恢复为普通启动，但当前无法连接皮肤。"
+                        : "Codex 没有成功启动，请从开始菜单手动打开。";
+                    Update(new RuntimeStatus(RuntimeState.NativeOnly, message, installation.Version));
+                    return new ThemeApplyResult(false, message);
+                }
             }
 
             Update(new RuntimeStatus(RuntimeState.Applying, "正在应用皮肤", installation.Version));
             var result = await _applicator.ApplyAsync(
                 settings.DebugPort,
-                theme,
+                effectiveTheme,
                 ResolveAssetPath,
                 TimeSpan.FromSeconds(20),
                 cancellationToken: cancellationToken);
 
             if (result.Success)
             {
-                var darkWindowChrome = !ThemeCompiler.UsesLightColorScheme(theme.Palette.Canvas);
+                var darkWindowChrome = !ThemeCompiler.UsesLightColorScheme(effectiveTheme.Palette.Canvas);
                 var chromeWindows = _windowChrome.Apply(_launcher.FindRunning(installation), darkWindowChrome);
                 _log.Info($"Codex window controls updated: dark={darkWindowChrome}; windows={chromeWindows}.");
             }

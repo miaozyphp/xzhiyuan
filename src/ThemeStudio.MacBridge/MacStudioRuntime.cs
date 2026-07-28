@@ -17,8 +17,7 @@ public sealed class MacStudioRuntime : IAsyncDisposable
     private readonly SemaphoreSlim _brokerGate = new(1, 1);
     private LoopbackAssetServer? _assets;
     private bool _appliedForSession;
-    private bool _restartSpent;
-    private DateTimeOffset? _unmanagedSeenAt;
+    private bool _nativeLaunchReported;
 
     public MacStudioRuntime(ThemeRepository repository, MacLog log)
     {
@@ -50,7 +49,7 @@ public sealed class MacStudioRuntime : IAsyncDisposable
 
             var settings = await _repository.GetSettingsAsync(cancellationToken);
             var targets = await _discovery.GetPageTargetsAsync(settings.DebugPort, cancellationToken);
-            if (targets.Count > 0)
+            if (targets.Any(CdpThemeApplicator.IsPrimaryCodexTarget))
                 return Update(new RuntimeStatus(RuntimeState.Idle, "Codex 已连接", installation.Version, Status.AppliedThemeId));
 
             var running = _launcher.FindRunning(installation).Count > 0;
@@ -94,6 +93,7 @@ public sealed class MacStudioRuntime : IAsyncDisposable
             }
 
             var settings = await _repository.GetSettingsAsync(cancellationToken);
+            var effectiveTheme = ThemeSafetyProfile.Apply(theme, settings.SafeMode);
             var targets = await _discovery.GetPageTargetsAsync(settings.DebugPort, cancellationToken);
             if (targets.Count == 0)
             {
@@ -118,7 +118,7 @@ public sealed class MacStudioRuntime : IAsyncDisposable
             Update(new RuntimeStatus(RuntimeState.Applying, "正在应用皮肤", installation.Version));
             var result = await _applicator.ApplyAsync(
                 settings.DebugPort,
-                theme,
+                effectiveTheme,
                 ResolveAssetPath,
                 TimeSpan.FromSeconds(20),
                 includeWindowControlsBackdrop: false,
@@ -169,28 +169,24 @@ public sealed class MacStudioRuntime : IAsyncDisposable
             if (running.Count == 0)
             {
                 _appliedForSession = false;
-                _restartSpent = false;
-                _unmanagedSeenAt = null;
+                _nativeLaunchReported = false;
                 return;
             }
 
             var status = await RefreshStatusAsync(cancellationToken);
             if (status.State is RuntimeState.Idle or RuntimeState.Applied)
             {
-                _unmanagedSeenAt = null;
+                _nativeLaunchReported = false;
                 if (!_appliedForSession)
                     _appliedForSession = (await ApplyDefaultAsync(cancellationToken)).Success;
                 return;
             }
 
-            if (!settings.RestartUnmanagedCodex || _restartSpent)
-                return;
-            _unmanagedSeenAt ??= DateTimeOffset.UtcNow;
-            if (DateTimeOffset.UtcNow - _unmanagedSeenAt < TimeSpan.FromSeconds(2.5))
-                return;
-            _restartSpent = true;
-            if (await _launcher.StopForManagedRestartAsync(running, cancellationToken))
-                _appliedForSession = (await ApplyDefaultAsync(cancellationToken)).Success;
+            if (!_nativeLaunchReported)
+            {
+                _nativeLaunchReported = true;
+                _log.Info("Broker detected a native Codex launch and left it running unchanged.");
+            }
         }
         catch (Exception error)
         {

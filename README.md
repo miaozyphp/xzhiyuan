@@ -10,8 +10,8 @@ x纸鸢是一款独立的 Windows Codex 主题工作台。它把图片与视频�
 
 ## 立即体验
 
-**[下载 Windows 安装版 EXE](https://github.com/miaozyphp/xzhiyuan/releases/download/v0.1.19/XZhiYuan-Setup-0.1.19-win-x64.exe)**
-· [下载免安装便携包](https://github.com/miaozyphp/xzhiyuan/releases/download/v0.1.19/XZhiYuan-0.1.19-win-x64-portable.zip)
+**[下载 Windows 安装版 EXE](https://github.com/miaozyphp/xzhiyuan/releases/download/v0.1.20/XZhiYuan-Setup-0.1.20-win-x64.exe)**
+· [下载免安装便携包](https://github.com/miaozyphp/xzhiyuan/releases/download/v0.1.20/XZhiYuan-0.1.20-win-x64-portable.zip)
 · [查看全部版本](https://github.com/miaozyphp/xzhiyuan/releases)
 
 安装版适合直接下载体验；便携包解压后运行，适合不希望写入安装目录的用户。当前版本为未签名预览版，Windows 可能显示“未知发布者”或 SmartScreen 提示，请从本仓库下载并按 [校验说明](docs/verify-download.md) 核对 SHA-256。
@@ -36,7 +36,8 @@ Apple Silicon Mac 候选版本已进入主分支，完成真实 M 系列 Mac 与
 | 可视化预览 | 无需先启动 Codex，即可切换首页、任务页和设置页检查文字、输入框、气泡与浮层效果。 |
 | 本地主题管理 | 支持新建、另存为、修改、复制、快捷删除、批量删除、默认主题以及自定义图片/视频分组。 |
 | 拖放与批量导入 | 将一个或多个图片、视频拖入左侧主题库，即可批量创建自定义主题；重复内容自动跳过且不中断其余文件。 |
-| 自动应用 | 可选后台代理让直接启动的 Codex 自动加载默认主题，也可随时关闭。 |
+| 后台应用 | 可选后台代理只为已建立调试连接的 Codex 应用默认主题；普通启动不会被关闭或强制重启。 |
+| 安全模式 | 只加载图片、配色和基础表面，自动关闭视频、深度布局和动态文字观察器。 |
 | 安全回退 | 不修改 Codex 安装包或签名；应用失败时只卸下主题，不关闭 Codex。 |
 
 ## 三步开始
@@ -53,7 +54,9 @@ x纸鸢通过 Chrome DevTools Protocol 向正在运行的 Codex 注入可撤销�
 
 主题媒体由随机端口上的本地回环服务提供，每次运行都会生成随机访问令牌。服务只监听 `127.0.0.1`，并且只读取主题数据目录中通过路径校验的文件。
 
-自动应用功能是可选的。启用后，x纸鸢会在当前用户的 Windows 启动项中注册后台代理；禁用功能或卸载软件会停止使用该代理。为接管未启用调试端口的 Codex，代理可能先请求正常关闭，再仅终止已确认属于目标安装位置的进程。
+后台应用功能是可选的。启用后，x纸鸢会在当前用户的 Windows 启动项中注册后台代理；禁用功能或卸载软件会停止使用该代理。代理只处理已经启用本地调试端口的 Codex，发现普通启动的 Codex 时保持其原样运行，绝不自动关闭或结束进程。
+
+显式“重新打开并应用”只请求 Codex 正常关闭。如果 Codex 没有在等待窗口内退出，操作会取消；纸鸢不会强制结束 Codex。启动主题模式失败时会尝试恢复普通 Codex。
 
 详细信息见 [PRIVACY.md](PRIVACY.md) 和 [SECURITY.md](SECURITY.md)。
 

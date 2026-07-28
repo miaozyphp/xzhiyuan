@@ -31,7 +31,7 @@ public static class ThemeCompiler
                 kind = theme.Media.Kind.ToString().ToLowerInvariant(),
                 url = mediaUrl,
                 opacity = Math.Clamp(theme.Media.Opacity, 0, 1),
-                blur = Math.Clamp(theme.Media.Blur, 0, 40),
+                blur = Math.Clamp(theme.Media.Blur, 0, theme.Media.Kind == MediaKind.Video ? 12 : 40),
                 fit = theme.Media.Fit,
                 position = theme.Media.Position,
                 muted = true
@@ -344,51 +344,74 @@ public static class ThemeCompiler
             element.setAttribute(toneAttribute, muted ? 'muted' : 'primary');
           }
 
-          function scanText(rootNode) {
-            if (!(rootNode instanceof Element)) return;
-            classifyText(rootNode);
-            for (const element of rootNode.querySelectorAll('*')) classifyText(element);
-          }
-
-          let scanFrame = 0;
           const pendingTextRoots = new Set();
+          const textJobs = [];
+          let scanHandle = 0;
+          let textObserver = null;
+          let scanWasIdle = false;
+          const scheduleTextWork = callback => {
+            if (typeof requestIdleCallback === 'function') {
+              scanWasIdle = true;
+              return requestIdleCallback(callback, { timeout: 120 });
+            }
+            scanWasIdle = false;
+            return setTimeout(() => callback({ didTimeout: true, timeRemaining: () => 4 }), 16);
+          };
+          const cancelTextWork = handle => {
+            if (!handle) return;
+            if (scanWasIdle && typeof cancelIdleCallback === 'function') cancelIdleCallback(handle);
+            else clearTimeout(handle);
+          };
           function queueTextScan(node) {
             const element = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
-            if (element) {
-              for (const pendingRoot of pendingTextRoots) {
-                if (pendingRoot.contains(element)) return;
-                if (element.contains(pendingRoot)) pendingTextRoots.delete(pendingRoot);
-              }
-              pendingTextRoots.add(element);
+            if (!element || !config.layers.components) return;
+            for (const pendingRoot of pendingTextRoots) {
+              if (pendingRoot.contains(element)) return;
+              if (element.contains(pendingRoot)) pendingTextRoots.delete(pendingRoot);
             }
-            if (scanFrame) return;
-            scanFrame = requestAnimationFrame(() => {
-              scanFrame = 0;
-              const roots = [...pendingTextRoots];
-              pendingTextRoots.clear();
-              for (const pendingRoot of roots) scanText(pendingRoot);
+            pendingTextRoots.add(element);
+            if (!scanHandle) scanHandle = scheduleTextWork(runTextWork);
+          }
+          function runTextWork(deadline) {
+            scanHandle = 0;
+            for (const rootNode of pendingTextRoots) {
+              if (rootNode instanceof Element) textJobs.push({ root: rootNode, walker: document.createTreeWalker(rootNode, NodeFilter.SHOW_ELEMENT), started: false });
+            }
+            pendingTextRoots.clear();
+            let budget = 160;
+            while (textJobs.length && budget > 0 && (deadline.didTimeout || deadline.timeRemaining() > 1)) {
+              const job = textJobs[0];
+              const element = job.started ? job.walker.nextNode() : job.root;
+              job.started = true;
+              if (!(element instanceof Element)) {
+                textJobs.shift();
+                continue;
+              }
+              classifyText(element);
+              budget--;
+            }
+            if (textJobs.length || pendingTextRoots.size) scanHandle = scheduleTextWork(runTextWork);
+          }
+          if (config.layers.components) {
+            textObserver = new MutationObserver(mutations => {
+              for (const mutation of mutations) {
+                if (mutation.type === 'characterData' || mutation.type === 'attributes') queueTextScan(mutation.target);
+                else {
+                  const changedElement = mutation.target?.nodeType === Node.ELEMENT_NODE ? mutation.target : mutation.target?.parentElement;
+                  if (changedElement) classifyText(changedElement);
+                  for (const node of mutation.addedNodes) queueTextScan(node);
+                }
+              }
+            });
+            queueTextScan(document.body);
+            textObserver.observe(document.body, {
+              subtree: true,
+              childList: true,
+              characterData: true,
+              attributes: true,
+              attributeFilter: ['class', 'data-placeholder', 'aria-placeholder', 'aria-label', 'role', 'disabled', 'aria-disabled']
             });
           }
-
-          const textObserver = new MutationObserver(mutations => {
-            for (const mutation of mutations) {
-              if (mutation.type === 'characterData') queueTextScan(mutation.target);
-              else if (mutation.type === 'attributes') queueTextScan(mutation.target);
-              else {
-                const changedElement = mutation.target?.nodeType === Node.ELEMENT_NODE ? mutation.target : mutation.target?.parentElement;
-                if (changedElement) classifyText(changedElement);
-                for (const node of mutation.addedNodes) queueTextScan(node);
-              }
-            }
-          });
-          scanText(document.body);
-          textObserver.observe(document.body, {
-            subtree: true,
-            childList: true,
-            characterData: true,
-            attributes: true,
-            attributeFilter: ['class', 'data-placeholder', 'aria-placeholder', 'aria-label', 'role', 'disabled', 'aria-disabled']
-          });
 
           if (config.windowControlsBackdrop) {
             const windowControlsBackdrop = add(document.createElement('div'));
@@ -397,13 +420,25 @@ public static class ThemeCompiler
             document.body.append(windowControlsBackdrop);
           }
 
+          let mediaVisibilityHandler = null;
           if (config.layers.media && config.media.url && config.media.kind !== 'none') {
             const mediaRoot = add(document.createElement('div'));
             mediaRoot.id = 'theme-studio-media';
             const media = document.createElement(config.media.kind === 'video' ? 'video' : 'img');
             media.src = config.media.url;
             media.setAttribute('aria-hidden', 'true');
-            if (media.tagName === 'VIDEO') { media.autoplay = true; media.loop = true; media.muted = true; media.playsInline = true; }
+            if (media.tagName === 'VIDEO') {
+              media.autoplay = false;
+              media.loop = true;
+              media.muted = true;
+              media.playsInline = true;
+              mediaVisibilityHandler = () => {
+                if (document.hidden) media.pause();
+                else media.play().catch(() => {});
+              };
+              document.addEventListener('visibilitychange', mediaVisibilityHandler);
+              mediaVisibilityHandler();
+            }
             mediaRoot.append(media);
             document.body.prepend(mediaRoot);
           }
@@ -421,8 +456,12 @@ public static class ThemeCompiler
           }
 
           const dispose = () => {
-            textObserver.disconnect();
-            if (scanFrame) cancelAnimationFrame(scanFrame);
+            textObserver?.disconnect();
+            if (mediaVisibilityHandler) document.removeEventListener('visibilitychange', mediaVisibilityHandler);
+            cancelTextWork(scanHandle);
+            scanHandle = 0;
+            pendingTextRoots.clear();
+            textJobs.length = 0;
             for (const element of document.querySelectorAll(`[${toneAttribute}]`)) clearTextTheme(element);
             for (const element of document.querySelectorAll('[data-theme-studio-owned="true"]')) element.remove();
             for (const url of config.objectUrls || []) { try { URL.revokeObjectURL(url); } catch {} }
@@ -433,7 +472,7 @@ public static class ThemeCompiler
             delete root.dataset.themeStudioSurfaces;
             delete window.__themeStudioRuntime;
           };
-          window.__themeStudioRuntime = { version: config.version, themeId: config.themeId, dispose, refreshText: () => scanText(document.body) };
+          window.__themeStudioRuntime = { version: config.version, themeId: config.themeId, dispose, refreshText: () => queueTextScan(document.body) };
           return JSON.stringify({ ok: true, themeId: config.themeId });
         })()
         """;

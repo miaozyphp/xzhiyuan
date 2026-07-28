@@ -75,12 +75,19 @@ public sealed class ThemeRepository
                 ? await ReadSettingsAsync(cancellationToken)
                 : new StudioSettings();
             var settingsChanged = !settingsExists;
+            if (settings.RestartUnmanagedCodex)
+            {
+                settings = settings with { RestartUnmanagedCodex = false };
+                settingsChanged = true;
+            }
             if (settings.BadgeBrandingVersion < CurrentBadgeBrandingVersion)
             {
                 await ApplyBrandBadgeDefaultsAsync(cancellationToken);
                 settings = settings with { BadgeBrandingVersion = CurrentBadgeBrandingVersion };
                 settingsChanged = true;
             }
+
+            CleanupOrphanedAssets();
 
             if (settingsChanged)
                 await WriteJsonAtomicAsync(SettingsPath, settings, cancellationToken);
@@ -248,7 +255,11 @@ public sealed class ThemeRepository
             File.Delete(GetThemePath(id));
             var ownedAssets = Path.Combine(AssetsPath, id);
             if (Directory.Exists(ownedAssets))
-                Directory.Delete(ownedAssets, true);
+            {
+                try { Directory.Delete(ownedAssets, true); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
         }
         finally
         {
@@ -267,14 +278,23 @@ public sealed class ThemeRepository
         var extension = Path.GetExtension(source);
         if (!AllowedAssetExtensions.Contains(extension))
             throw new InvalidDataException("Unsupported media format.");
+        ThemeMediaPolicy.ValidateLength(extension, new FileInfo(source).Length);
 
         var folder = Path.Combine(AssetsPath, themeId);
         Directory.CreateDirectory(folder);
         var fileName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
         var target = Path.Combine(folder, fileName);
-        await using var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, true);
-        await using var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true);
-        await input.CopyToAsync(output, cancellationToken);
+        try
+        {
+            await using var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, true);
+            await using var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true);
+            await input.CopyToAsync(output, cancellationToken);
+        }
+        catch
+        {
+            try { File.Delete(target); } catch { }
+            throw;
+        }
         return Path.GetRelativePath(RootPath, target).Replace('\\', '/');
     }
 
@@ -291,13 +311,22 @@ public sealed class ThemeRepository
         extension = extension.Trim().ToLowerInvariant();
         if (!AllowedAssetExtensions.Contains(extension))
             throw new InvalidDataException("Unsupported media format.");
+        ThemeMediaPolicy.ValidateLength(extension, bytes.Length);
 
         var folder = Path.Combine(AssetsPath, themeId);
         Directory.CreateDirectory(folder);
         var fileName = $"{Guid.NewGuid():N}{extension}";
         var target = Path.Combine(folder, fileName);
-        await using var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true);
-        await output.WriteAsync(bytes, cancellationToken);
+        try
+        {
+            await using var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true);
+            await output.WriteAsync(bytes, cancellationToken);
+        }
+        catch
+        {
+            try { File.Delete(target); } catch { }
+            throw;
+        }
         return Path.GetRelativePath(RootPath, target).Replace('\\', '/');
     }
 
@@ -381,6 +410,30 @@ public sealed class ThemeRepository
         }
 
         return index;
+    }
+
+    private void CleanupOrphanedAssets()
+    {
+        if (!Directory.Exists(AssetsPath))
+            return;
+        foreach (var folder in Directory.EnumerateDirectories(AssetsPath))
+        {
+            var id = Path.GetFileName(folder);
+            if (string.Equals(id, "built-in", StringComparison.OrdinalIgnoreCase))
+                continue;
+            try
+            {
+                if (File.Exists(GetThemePath(id)))
+                    continue;
+            }
+            catch (InvalidDataException)
+            {
+                continue;
+            }
+            try { Directory.Delete(folder, true); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
     }
 
     private static string? NormalizeContentHash(string? value) =>

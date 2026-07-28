@@ -5,7 +5,8 @@
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const clone = value => JSON.parse(JSON.stringify(value));
   const pending = new Map();
-  const maxDroppedMediaBytes = 80 * 1024 * 1024;
+  const maxDroppedImageBytes = 32 * 1024 * 1024;
+  const maxDroppedVideoBytes = 64 * 1024 * 1024;
   let requestNumber = 0;
 
   const state = {
@@ -29,7 +30,8 @@
     selectedThemeIds: new Set(),
     deleteIds: [],
     busy: false,
-    busyButton: null
+    busyButton: null,
+    studioVisible: true
   };
 
   const nativeBridge = window.chrome?.webview || window.xzhiyuan;
@@ -80,7 +82,8 @@
     if (method !== "bootstrap" && method !== "refresh") {
       await new Promise(resolve => setTimeout(resolve, 220));
       if (method === "applyTheme" || method === "launchCodex") return { success: true, message: "预览模式：皮肤已准备。", suspendedLayers: [] };
-      if (method === "checkUpdate") return { state: "available", currentVersion: "0.1.19", latestVersion: "0.1.20", updateAvailable: true, readyToInstall: false, progress: 0, message: "发现新版本 0.1.20", releaseUrl: "https://github.com/miaozyphp/xzhiyuan/releases/tag/v0.1.20" };
+      if (method === "setSafeMode") return { ...state.settings, safeMode: Boolean(params.enabled) };
+      if (method === "checkUpdate") return { state: "available", currentVersion: "0.1.20", latestVersion: "0.1.21", updateAvailable: true, readyToInstall: false, progress: 0, message: "发现新版本 0.1.21", releaseUrl: "https://github.com/miaozyphp/xzhiyuan/releases/tag/v0.1.21" };
       if (method === "downloadUpdate") return { ...state.update, state: "ready", readyToInstall: true, progress: 100, message: "更新已下载并通过校验" };
       if (method === "installUpdate") return { started: true };
       if (method === "pickMedia" || method === "pickBadge") return { cancelled: true };
@@ -125,7 +128,7 @@
       { ...clone(sample), id: "personal-rain", name: "我的雨夜", builtIn: false, updatedAt: new Date().toISOString() },
       { ...clone(sample), id: "personal-paper", name: "我的晴空", builtIn: false, mode: "standard", media: { ...sample.media, kind: "none" }, updatedAt: new Date().toISOString() }
     ];
-    return { platform: "windows", themes: variants.map(theme => ({ theme, mediaUrl: theme.id === "rain-archive" || theme.id === "personal-rain" ? "../SeedAssets/rain-archive.png" : null, badgeUrl: "assets/x-zhiyuan-emblem.png" })), settings: { defaultThemeId: "rain-archive", brokerEnabled: false }, status: { state: "codexStopped", message: "Codex 已就绪", codexVersion: "26.721" }, update: { state: "idle", currentVersion: "0.1.19", latestVersion: null, updateAvailable: false, readyToInstall: false, progress: 0, message: "尚未检查更新" } };
+    return { platform: "windows", themes: variants.map(theme => ({ theme, mediaUrl: theme.id === "rain-archive" || theme.id === "personal-rain" ? "../SeedAssets/rain-archive.png" : null, badgeUrl: "assets/x-zhiyuan-emblem.png" })), settings: { defaultThemeId: "rain-archive", brokerEnabled: false, safeMode: false }, status: { state: "codexStopped", message: "Codex 已就绪", codexVersion: "26.721" }, update: { state: "idle", currentVersion: "0.1.20", latestVersion: null, updateAvailable: false, readyToInstall: false, progress: 0, message: "尚未检查更新" } };
   }
 
   async function initialize() {
@@ -149,6 +152,7 @@
     state.status = data.status || {};
     state.update = data.update || state.update;
     $("#auto-apply-toggle").checked = Boolean(state.settings.brokerEnabled);
+    $("#safe-mode-toggle").checked = Boolean(state.settings.safeMode);
     renderStatus();
     renderUpdateStatus();
     renderThemes();
@@ -177,6 +181,7 @@
     $("#update-chip").addEventListener("click", openUpdateDialog);
     $("#cancel-update").addEventListener("click", () => $("#update-dialog").close());
     $("#update-action-button").addEventListener("click", handleUpdateAction);
+    $("#diagnostics-button").addEventListener("click", exportDiagnostics);
     $("#save-copy-button").addEventListener("click", openSaveDialog);
     $("#new-theme-button").addEventListener("click", openNewThemeDialog);
     $("#update-button").addEventListener("click", updateCurrentTheme);
@@ -192,10 +197,20 @@
       try {
         const settings = await api("setAutoApply", { enabled });
         state.settings = settings;
-        toast(enabled ? "已开启自动应用" : "已关闭自动应用", enabled ? "直接打开 Codex 时会载入默认主题。" : "Codex 将使用普通启动方式。", "success");
+        toast(enabled ? "已开启后台应用" : "已关闭后台应用", enabled ? "只对已连接的 Codex 自动应用；普通启动不会被关闭。" : "后台代理已停用。", "success");
       } catch (error) {
         event.target.checked = !enabled;
         toast("设置未保存", error.message, "error");
+      }
+    });
+    $("#safe-mode-toggle").addEventListener("change", async event => {
+      const enabled = event.target.checked;
+      try {
+        state.settings = await api("setSafeMode", { enabled });
+        toast(enabled ? "已开启安全模式" : "已关闭安全模式", enabled ? "下一次应用主题时只加载图片、配色和基础表面。" : "下一次应用主题时恢复主题的完整配置。", "success");
+      } catch (error) {
+        event.target.checked = !enabled;
+        toast("安全模式未保存", error.message, "error");
       }
     });
 
@@ -250,8 +265,8 @@
     files.forEach(file => {
       if (!isSupportedMediaFile(file)) {
         failures.push({ file, reason: "格式不支持" });
-      } else if (file.size > maxDroppedMediaBytes) {
-        failures.push({ file, reason: "超过 80 MB" });
+      } else if (file.size > maximumDroppedBytes(file)) {
+        failures.push({ file, reason: `超过 ${maximumDroppedBytes(file) / 1024 / 1024} MB` });
       } else {
         queued.push(file);
       }
@@ -346,6 +361,10 @@
       reader.onerror = () => reject(new Error("文件读取失败，请重试。"));
       reader.readAsDataURL(file);
     });
+  }
+
+  function maximumDroppedBytes(file) {
+    return /\.(mp4|webm|mov)$/i.test(file?.name || "") ? maxDroppedVideoBytes : maxDroppedImageBytes;
   }
 
   function renderThemes() {
@@ -840,8 +859,8 @@
     const video = $("#preview-video");
     const videoMode = mediaKind(m.kind) === "video" && state.draftMediaUrl;
     preview.classList.toggle("video-mode", Boolean(videoMode));
-    if (videoMode && video.src !== state.draftMediaUrl) { video.src = state.draftMediaUrl; video.play().catch(() => {}); }
-    if (!videoMode) { video.pause(); video.removeAttribute("src"); }
+    if (videoMode && video.getAttribute("src") !== state.draftMediaUrl) prepareVideoCover(video, state.draftMediaUrl);
+    if (!videoMode) releaseVideo(video);
     applyStudioBackdrop(p, s, m);
 
     const badgeImage = $("#mock-badge-image");
@@ -894,17 +913,49 @@
     shell.classList.toggle("studio-media-active", mediaEnabled);
     shell.classList.toggle("studio-video-mode", videoMode);
 
-    if (videoMode && video.getAttribute("src") !== state.draftMediaUrl) {
-      video.src = state.draftMediaUrl;
-      video.muted = true;
-      video.play().catch(() => {});
+    if (videoMode) {
+      if (video.getAttribute("src") !== state.draftMediaUrl) {
+        video.src = state.draftMediaUrl;
+        video.muted = true;
+      }
+      if (state.studioVisible) video.play().catch(() => {});
     }
-    if (!videoMode && video.hasAttribute("src")) {
+    if (!videoMode) releaseVideo(video);
+  }
+
+  function prepareVideoCover(video, source) {
+    releaseVideo(video);
+    video.preload = "metadata";
+    video.muted = true;
+    video.src = source;
+    const seekToCover = () => {
+      const duration = Number.isFinite(video.duration) ? video.duration : 0;
+      try { video.currentTime = duration > .08 ? Math.min(.08, duration / 2) : 0; } catch { }
       video.pause();
+    };
+    if (video.readyState >= 1) seekToCover();
+    else video.addEventListener("loadedmetadata", seekToCover, { once: true });
+    video.addEventListener("seeked", () => video.pause(), { once: true });
+  }
+
+  function releaseVideo(video) {
+    if (!video) return;
+    video.pause();
+    if (video.hasAttribute("src")) {
       video.removeAttribute("src");
       video.load();
     }
   }
+
+  window.xzhiyuanSetVisible = visible => {
+    state.studioVisible = Boolean(visible);
+    if (!visible) {
+      $("#studio-video")?.pause();
+      $("#preview-video")?.pause();
+      return;
+    }
+    if (state.draft) applyPreview();
+  };
 
   function markDirty() {
     state.dirty = JSON.stringify(state.draft) !== JSON.stringify(state.original);
@@ -1224,6 +1275,7 @@
       state.status = data.status || {};
       state.update = data.update || state.update;
       $("#auto-apply-toggle").checked = Boolean(state.settings.brokerEnabled);
+      $("#safe-mode-toggle").checked = Boolean(state.settings.safeMode);
       renderStatus(); renderUpdateStatus(); renderThemes();
       selectTheme(state.themes.some(item => item.theme.id === selected) ? selected : state.themes[0]?.theme.id);
       toast("已刷新", "主题图库和 Codex 状态已更新。", "success");
@@ -1254,6 +1306,15 @@
       state.update = { ...state.update, state: "error", message: error.message };
       renderUpdateStatus();
       if (manual) toast("检查更新失败", error.message, "error");
+    }
+  }
+
+  async function exportDiagnostics() {
+    try {
+      const result = await api("exportDiagnostics");
+      toast("诊断包已生成", result.path || "已保存到主题数据目录。", "success");
+    } catch (error) {
+      toast("诊断包生成失败", error.message, "error");
     }
   }
 

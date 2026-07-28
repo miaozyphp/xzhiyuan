@@ -12,8 +12,7 @@ public sealed class BrokerApplicationContext : ApplicationContext
     private readonly CodexLauncher _launcher = new();
     private bool _busy;
     private bool _appliedForSession;
-    private bool _restartSpent;
-    private DateTimeOffset? _unmanagedSeenAt;
+    private bool _nativeLaunchReported;
 
     public BrokerApplicationContext(StudioRuntime runtime, ThemeRepository repository, LocalLog log)
     {
@@ -46,15 +45,14 @@ public sealed class BrokerApplicationContext : ApplicationContext
             if (running.Count == 0)
             {
                 _appliedForSession = false;
-                _restartSpent = false;
-                _unmanagedSeenAt = null;
+                _nativeLaunchReported = false;
                 return;
             }
 
             var status = await _runtime.RefreshStatusAsync();
             if (status.State is ThemeStudio.Core.Models.RuntimeState.Idle or ThemeStudio.Core.Models.RuntimeState.Applied)
             {
-                _unmanagedSeenAt = null;
+                _nativeLaunchReported = false;
                 if (!_appliedForSession)
                 {
                     var result = await _runtime.ApplyDefaultAsync();
@@ -63,25 +61,11 @@ public sealed class BrokerApplicationContext : ApplicationContext
                 return;
             }
 
-            if (!settings.RestartUnmanagedCodex || _restartSpent)
-                return;
-            _unmanagedSeenAt ??= DateTimeOffset.UtcNow;
-            if (DateTimeOffset.UtcNow - _unmanagedSeenAt < TimeSpan.FromSeconds(2.5))
-                return;
-
-            _restartSpent = true;
-            try
+            if (!_nativeLaunchReported)
             {
-                var stopped = await _launcher.StopForManagedRestartAsync(running);
-                if (!stopped)
-                    return;
+                _nativeLaunchReported = true;
+                _log.Info("Broker detected a native Codex launch and left it running unchanged.");
             }
-            catch (Exception error)
-            {
-                _log.Error("Broker could not restart an unmanaged Codex process.", error);
-                return;
-            }
-            await _runtime.ApplyDefaultAsync();
         }
         catch (Exception error)
         {

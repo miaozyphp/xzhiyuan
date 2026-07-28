@@ -23,6 +23,52 @@ public sealed class ThemeRepositoryTests
     }
 
     [Fact]
+    public async Task InitializationDisablesLegacyUnmanagedRestartSetting()
+    {
+        using var temp = new TempDirectory();
+        var repository = new ThemeRepository(temp.Path);
+        await repository.InitializeAsync();
+        await repository.SaveSettingsAsync(new StudioSettings { BrokerEnabled = true, RestartUnmanagedCodex = true });
+
+        await repository.InitializeAsync();
+
+        var settings = await repository.GetSettingsAsync();
+        Assert.True(settings.BrokerEnabled);
+        Assert.False(settings.RestartUnmanagedCodex);
+    }
+
+    [Fact]
+    public async Task RejectsOversizedImportedMedia()
+    {
+        using var temp = new TempDirectory();
+        var repository = new ThemeRepository(temp.Path);
+        await repository.InitializeAsync();
+        var source = Path.Combine(temp.Path, "large.png");
+        await using (var stream = new FileStream(source, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            stream.SetLength(ThemeMediaPolicy.MaximumImageBytes + 1);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => repository.ImportAssetAsync("large-theme", source));
+    }
+
+    [Fact]
+    public async Task DiagnosticBundleExcludesUserMedia()
+    {
+        using var temp = new TempDirectory();
+        var repository = new ThemeRepository(temp.Path);
+        await repository.InitializeAsync();
+        await File.WriteAllTextAsync(Path.Combine(repository.RootPath, "theme-studio.log"), "test log");
+        var mediaPath = Path.Combine(repository.RootPath, "assets", "personal-theme", "wallpaper.mp4");
+        Directory.CreateDirectory(Path.GetDirectoryName(mediaPath)!);
+        await File.WriteAllBytesAsync(mediaPath, [1, 2, 3]);
+
+        var path = await new ThemeDiagnosticService(repository).CreateAsync(new RuntimeStatus(RuntimeState.Idle, "test"));
+        using var archive = System.IO.Compression.ZipFile.OpenRead(path);
+
+        Assert.Contains(archive.Entries, entry => entry.FullName == "theme-studio.log");
+        Assert.DoesNotContain(archive.Entries, entry => entry.FullName.Contains("wallpaper", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task CopyOwnsMediaAndSurvivesSourceDeletion()
     {
         using var temp = new TempDirectory();
