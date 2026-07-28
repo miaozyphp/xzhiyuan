@@ -9,6 +9,19 @@ namespace ThemeStudio.Core.Tests;
 public sealed class ReleaseUpdateServiceTests
 {
     [Fact]
+    public void SynchronousProgressReportsBeforeReturning()
+    {
+        var sequence = new List<string>();
+        var progress = new SynchronousProgress<int>(value => sequence.Add($"progress:{value}"));
+
+        sequence.Add("before");
+        progress.Report(100);
+        sequence.Add("after");
+
+        Assert.Equal(["before", "progress:100", "after"], sequence);
+    }
+
+    [Fact]
     public async Task DownloadsAndVerifiesNewerGitHubRelease()
     {
         using var temp = new TempDirectory();

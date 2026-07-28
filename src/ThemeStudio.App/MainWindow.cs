@@ -146,7 +146,7 @@ public sealed class MainWindow : Form
             else
             {
                 var progress = method == "downloadUpdate"
-                    ? new Progress<AppUpdateProgress>(value => PostEvent("updateProgress", value))
+                    ? new SynchronousProgress<AppUpdateProgress>(value => PostEvent("updateProgress", value))
                     : null;
                 result = await _controller.HandleAsync(method, parameters, progress);
             }

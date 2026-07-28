@@ -59,7 +59,7 @@ static async Task HandleRequestAsync(string line, MacAppController controller, J
         var method = root.GetProperty("method").GetString() ?? string.Empty;
         var parameters = root.TryGetProperty("params", out var value) ? value.Clone() : EmptyParameters();
         var progress = method == "downloadUpdate"
-            ? new Progress<AppUpdateProgress>(item => protocol.Write(new { @event = "updateProgress", data = item }))
+            ? new SynchronousProgress<AppUpdateProgress>(item => protocol.Write(new { @event = "updateProgress", data = item }))
             : null;
         var result = await controller.HandleAsync(method, parameters, progress);
         protocol.Write(new { id, ok = true, result, error = (string?)null });

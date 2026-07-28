@@ -9,6 +9,12 @@ All notable changes to x纸鸢 are documented here.
 - Added macOS Codex bundle discovery, managed restart, menu-bar residency, login auto-apply, native file selection, and DMG updates.
 - Added isolated Electron IPC, platform-specific window-control handling, and macOS package tests.
 
+## 0.1.19 - 2026-07-28
+
+- Fixed verified update downloads remaining stuck at 100% instead of enabling installation.
+- Ordered progress events before the completed download response on Windows and macOS hosts.
+- Ignored delayed progress events after an update has reached the ready-to-install state.
+
 ## 0.1.18 - 2026-07-28
 
 - Added always-visible quick deletion for custom themes and checkbox-based batch management.
