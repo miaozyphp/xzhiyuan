@@ -59,9 +59,55 @@ public sealed class ThemeRepositoryTests
 
         Assert.False(copy.BuiltIn);
         Assert.Equal(MediaKind.Video, copy.Media.Kind);
+        Assert.Equal(
+            Convert.ToHexString(System.Security.Cryptography.SHA256.HashData([5, 4, 3, 2])).ToLowerInvariant(),
+            copy.Media.ContentHash);
         Assert.Equal(ThemeBadge.DefaultAssetPath, copy.Badge.AssetPath);
         Assert.True(copy.Layers.Badge);
         Assert.Equal([5, 4, 3, 2], await File.ReadAllBytesAsync(repository.ResolveAssetPath(copy.Media.AssetPath!)));
+    }
+
+    [Fact]
+    public async Task SkipsDuplicateDroppedMediaWithoutCreatingAnotherTheme()
+    {
+        using var temp = new TempDirectory();
+        var repository = new ThemeRepository(temp.Path);
+        await repository.InitializeAsync();
+        var source = ThemeValidatorTests.CreateTheme("source-theme");
+        var bytes = new byte[] { 7, 3, 9, 1, 4, 8 };
+
+        var first = await repository.CreateCopyWithMediaAsync(source, "First Import", MediaKind.Image, bytes, ".png");
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            repository.CreateCopyWithMediaAsync(source, "Repeated Import", MediaKind.Image, bytes, ".jpg"));
+
+        Assert.Contains(first.Name, error.Message);
+        Assert.DoesNotContain((await repository.GetAllAsync()), theme => theme.Name == "Repeated Import");
+    }
+
+    [Fact]
+    public async Task DetectsDuplicateMediaFromLegacyThemeWithoutStoredHash()
+    {
+        using var temp = new TempDirectory();
+        var repository = new ThemeRepository(temp.Path);
+        await repository.InitializeAsync();
+        var bytes = new byte[] { 2, 4, 6, 8, 10 };
+        var sourceFile = Path.Combine(temp.Path, "legacy.png");
+        await File.WriteAllBytesAsync(sourceFile, bytes);
+        var legacy = ThemeValidatorTests.CreateTheme("legacy-theme") with
+        {
+            Name = "Legacy Theme",
+            Media = new ThemeMedia
+            {
+                Kind = MediaKind.Image,
+                AssetPath = await repository.ImportAssetAsync("legacy-theme", sourceFile)
+            }
+        };
+        await repository.SaveAsync(legacy);
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            repository.CreateCopyWithMediaAsync(legacy, "Repeated Legacy", MediaKind.Image, bytes, ".png"));
+
+        Assert.Contains("Legacy Theme", error.Message);
     }
 
     [Fact]

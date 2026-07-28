@@ -25,6 +25,7 @@ public sealed class AppController(ThemeRepository repository, StudioRuntime runt
         "createThemeFromDroppedAsset" => await CreateThemeFromDroppedAssetAsync(parameters, cancellationToken),
         "duplicateTheme" => await DuplicateThemeAsync(parameters, cancellationToken),
         "deleteTheme" => await DeleteThemeAsync(parameters, cancellationToken),
+        "deleteThemes" => await DeleteThemesAsync(parameters, cancellationToken),
         "setDefaultTheme" => await SetDefaultThemeAsync(parameters, cancellationToken),
         "setAutoApply" => await SetAutoApplyAsync(parameters, cancellationToken),
         "applyTheme" => await ApplyThemeAsync(parameters, cancellationToken),
@@ -124,6 +125,38 @@ public sealed class AppController(ThemeRepository repository, StudioRuntime runt
         return new { deleted = true };
     }
 
+    private async Task<object> DeleteThemesAsync(JsonElement parameters, CancellationToken cancellationToken)
+    {
+        var ids = ReadThemeIds(parameters);
+        var deletedIds = new List<string>();
+        var failedIds = new List<string>();
+        foreach (var id in ids)
+        {
+            try
+            {
+                await repository.DeleteAsync(id, cancellationToken);
+                deletedIds.Add(id);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                failedIds.Add(id);
+            }
+        }
+
+        var settings = await repository.GetSettingsAsync(cancellationToken);
+        if (deletedIds.Contains(settings.DefaultThemeId, StringComparer.Ordinal))
+        {
+            settings = settings with { DefaultThemeId = DefaultThemeCatalog.DefaultThemeId };
+            await repository.SaveSettingsAsync(settings, cancellationToken);
+        }
+
+        return new { deletedIds, failedIds, defaultThemeId = settings.DefaultThemeId };
+    }
+
     private async Task<object> SetDefaultThemeAsync(JsonElement parameters, CancellationToken cancellationToken)
     {
         var id = parameters.GetProperty("id").GetString() ?? throw new InvalidDataException("主题编号为空。");
@@ -133,6 +166,21 @@ public sealed class AppController(ThemeRepository repository, StudioRuntime runt
         var updated = settings with { DefaultThemeId = id };
         await repository.SaveSettingsAsync(updated, cancellationToken);
         return updated;
+    }
+
+    private static IReadOnlyList<string> ReadThemeIds(JsonElement parameters)
+    {
+        if (!parameters.TryGetProperty("ids", out var values) || values.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("没有选择要删除的主题。");
+        var ids = values.EnumerateArray()
+            .Where(value => value.ValueKind == JsonValueKind.String)
+            .Select(value => value.GetString())
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (ids.Length is 0 or > 100)
+            throw new InvalidDataException("一次最多删除 100 个自定义主题。");
+        return ids!;
     }
 
     private async Task<object> SetAutoApplyAsync(JsonElement parameters, CancellationToken cancellationToken)

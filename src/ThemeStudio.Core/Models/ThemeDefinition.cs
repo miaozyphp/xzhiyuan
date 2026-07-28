@@ -36,6 +36,7 @@ public sealed record ThemeMedia
 {
     public MediaKind Kind { get; init; } = MediaKind.None;
     public string? AssetPath { get; init; }
+    public string? ContentHash { get; init; }
     public double Opacity { get; init; } = 0.62;
     public double Blur { get; init; }
     public string Fit { get; init; } = "cover";

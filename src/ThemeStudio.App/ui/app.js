@@ -25,7 +25,9 @@
     activeInspector: "appearance",
     activePreview: "home",
     dirty: false,
-    deleteId: null,
+    selectionMode: false,
+    selectedThemeIds: new Set(),
+    deleteIds: [],
     busy: false,
     busyButton: null
   };
@@ -102,6 +104,7 @@
         const theme = { ...clone(source?.theme), id: `custom-${Date.now().toString(36)}`, name: params.name, builtIn: false, updatedAt: new Date().toISOString() };
         return { theme, mediaUrl: source?.mediaUrl || null, badgeUrl: source?.badgeUrl || null };
       }
+      if (method === "deleteThemes") return { deletedIds: params.ids || [], failedIds: [], defaultThemeId: state.settings.defaultThemeId };
       if (method === "saveTheme") return { theme: { ...clone(params.theme), updatedAt: new Date().toISOString() }, mediaUrl: state.draftMediaUrl, badgeUrl: state.draftBadgeUrl };
       return params;
     }
@@ -117,9 +120,11 @@
     const variants = [
       sample,
       { ...clone(sample), id: "paper-sky", name: "纸上晴空", mode: "standard", media: { ...sample.media, kind: "none" }, palette: { ...sample.palette, canvas: "#EAF2F3", surface: "#F8FBFA", elevated: "#FFFFFF", text: "#142023", mutedText: "#66777C", border: "#C5D3D6", accent: "#168DA3", accentText: "#FFFFFF" } },
-      { ...clone(sample), id: "amber-library", name: "琥珀图书馆", media: { ...sample.media, kind: "none" }, palette: { ...sample.palette, canvas: "#17130E", surface: "#211A12", elevated: "#2A2117", text: "#F4EBDD", mutedText: "#BDAE99", border: "#493B2A", accent: "#D79A36", accentText: "#1B1207" } }
+      { ...clone(sample), id: "amber-library", name: "琥珀图书馆", media: { ...sample.media, kind: "none" }, palette: { ...sample.palette, canvas: "#17130E", surface: "#211A12", elevated: "#2A2117", text: "#F4EBDD", mutedText: "#BDAE99", border: "#493B2A", accent: "#D79A36", accentText: "#1B1207" } },
+      { ...clone(sample), id: "personal-rain", name: "我的雨夜", builtIn: false, updatedAt: new Date().toISOString() },
+      { ...clone(sample), id: "personal-paper", name: "我的晴空", builtIn: false, mode: "standard", media: { ...sample.media, kind: "none" }, updatedAt: new Date().toISOString() }
     ];
-    return { platform: "windows", themes: variants.map(theme => ({ theme, mediaUrl: theme.id === "rain-archive" ? "../SeedAssets/rain-archive.png" : null, badgeUrl: "assets/x-zhiyuan-emblem.png" })), settings: { defaultThemeId: "rain-archive", brokerEnabled: false }, status: { state: "codexStopped", message: "Codex 已就绪", codexVersion: "26.721" }, update: { state: "idle", currentVersion: "0.1.17", latestVersion: null, updateAvailable: false, readyToInstall: false, progress: 0, message: "尚未检查更新" } };
+    return { platform: "windows", themes: variants.map(theme => ({ theme, mediaUrl: theme.id === "rain-archive" || theme.id === "personal-rain" ? "../SeedAssets/rain-archive.png" : null, badgeUrl: "assets/x-zhiyuan-emblem.png" })), settings: { defaultThemeId: "rain-archive", brokerEnabled: false }, status: { state: "codexStopped", message: "Codex 已就绪", codexVersion: "26.721" }, update: { state: "idle", currentVersion: "0.1.17", latestVersion: null, updateAvailable: false, readyToInstall: false, progress: 0, message: "尚未检查更新" } };
   }
 
   async function initialize() {
@@ -158,6 +163,11 @@
       activateThemeFilter(button.dataset.filter);
     });
     $("#theme-list").addEventListener("click", onThemeListClick);
+    $("#theme-list").addEventListener("change", onThemeListChange);
+    $("#custom-manage-button").addEventListener("click", enterSelectionMode);
+    $("#select-all-custom").addEventListener("click", toggleSelectAllCustom);
+    $("#batch-delete-button").addEventListener("click", openBatchDeleteDialog);
+    $("#exit-selection-mode").addEventListener("click", exitSelectionMode);
     $("#refresh-button").addEventListener("click", refreshWorkbench);
     $("#version-button").addEventListener("click", () => {
       openUpdateDialog();
@@ -271,7 +281,8 @@
           created.push(item);
           usedNames.add(normalizeThemeName(item.theme.name));
         } catch (error) {
-          failures.push({ file, reason: error.message || "导入失败" });
+          const reason = error.message || "导入失败";
+          failures.push({ file, reason, duplicate: reason.includes("跳过重复导入") });
         }
       }
 
@@ -284,7 +295,8 @@
           : `已新建 ${created.length} 个自定义主题，并按图片和视频自动归类。`;
         toast(title, message, skipped ? "info" : "success");
       } else {
-        toast("批量导入失败", describeDroppedMediaFailures(failures), "error");
+        const duplicatesOnly = failures.length > 0 && failures.every(item => item.duplicate);
+        toast(duplicatesOnly ? "没有新增主题" : "批量导入失败", describeDroppedMediaFailures(failures), duplicatesOnly ? "info" : "error");
       }
     } finally {
       setBusy(false);
@@ -337,8 +349,13 @@
 
   function renderThemes() {
     const search = $("#theme-search").value.trim().toLocaleLowerCase();
+    const customCount = state.themes.filter(item => !item.theme.builtIn).length;
+    const manageButton = $("#custom-manage-button");
+    manageButton.hidden = customCount === 0;
+    manageButton.classList.toggle("active", state.selectionMode);
     const visible = state.themes.filter(item => {
       const theme = item.theme;
+      if (state.selectionMode && theme.builtIn) return false;
       const matchesSearch = !search || `${theme.name} ${theme.description || ""}`.toLocaleLowerCase().includes(search);
       if (!matchesSearch) return false;
       if (state.activeFilter === "custom") return !theme.builtIn;
@@ -353,8 +370,10 @@
     if (!visible.length) {
       const empty = document.createElement("div");
       empty.className = "library-empty";
-      empty.textContent = "没有符合条件的主题";
+      empty.textContent = state.selectionMode ? "没有可管理的自定义主题" : "没有符合条件的主题";
       list.append(empty);
+      renderSelectionToolbar();
+      refreshIcons();
       return;
     }
 
@@ -372,7 +391,8 @@
           ? `<video class="video-cover" src="${attr(thumbMediaUrl)}" muted playsinline preload="metadata" aria-hidden="true"></video><span class="video-cover-mark"><i data-lucide="film"></i></span>`
           : "";
       const row = document.createElement("div");
-      row.className = `theme-item${theme.id === state.selectedId ? " active" : ""}`;
+      const batchSelected = state.selectedThemeIds.has(theme.id);
+      row.className = `theme-item${theme.builtIn ? "" : " custom"}${theme.id === state.selectedId ? " active" : ""}${batchSelected ? " batch-selected" : ""}${state.selectionMode && !theme.builtIn ? " selection-mode" : ""}`;
       row.dataset.section = theme.builtIn ? "default" : mediaKind(theme.media.kind) === "video" ? "custom-video" : "custom-image";
       row.style.setProperty("--item-index", index);
       row.innerHTML = `
@@ -380,15 +400,18 @@
           <span class="theme-thumb" style="--thumb-canvas:${attr(theme.palette.canvas)};--thumb-surface:${attr(theme.palette.surface)};--thumb-accent:${attr(theme.palette.accent)}">${thumbMedia}</span>
           <span class="theme-copy"><strong>${text(theme.name)}</strong><small>${modeName(theme.mode)}${isDefault ? "<em>默认</em>" : ""}</small></span>
         </button>
-        <span class="theme-actions">
+        ${!theme.builtIn && state.selectionMode ? `<label class="theme-batch-check" title="选择“${attr(theme.name)}”"><input type="checkbox" data-batch-select="${attr(theme.id)}" ${batchSelected ? "checked" : ""}><span><i data-lucide="check"></i></span></label>` : ""}
+        ${!theme.builtIn && !state.selectionMode ? `<button class="theme-quick-delete" type="button" data-quick-delete="${attr(theme.id)}" title="快捷删除“${attr(theme.name)}”" aria-label="快捷删除“${attr(theme.name)}”"><i data-lucide="trash-2"></i><span>删除</span></button>` : ""}
+        ${state.selectionMode ? "" : `<span class="theme-actions">
           <button class="theme-action default${isDefault ? " current" : ""}" type="button" data-action="default" data-id="${attr(theme.id)}" title="${isDefault ? "当前默认主题" : "设为默认主题"}" ${isDefault ? "disabled" : ""}><i data-lucide="star"></i><span>${isDefault ? "当前默认" : "设为默认"}</span></button>
           <button class="theme-action" type="button" data-action="duplicate" data-id="${attr(theme.id)}" title="创建独立副本"><i data-lucide="copy-plus"></i><span>创建副本</span></button>
           ${theme.builtIn ? "" : `<button class="theme-action delete" type="button" data-action="delete" data-id="${attr(theme.id)}" title="删除这个自定义主题"><i data-lucide="trash-2"></i><span>删除</span></button>`}
-        </span>`;
+        </span>`}`;
       list.append(row);
     });
     wrapThemeSections(list);
     initializeVideoCovers(list);
+    renderSelectionToolbar();
     refreshIcons();
   }
 
@@ -438,6 +461,73 @@
     renderThemes();
   }
 
+  function enterSelectionMode() {
+    if (state.busy || !state.themes.some(item => !item.theme.builtIn)) return;
+    state.selectionMode = true;
+    state.selectedThemeIds.clear();
+    $("#theme-search").value = "";
+    state.collapsedSections.delete("custom-image");
+    state.collapsedSections.delete("custom-video");
+    activateThemeFilter("custom");
+  }
+
+  function exitSelectionMode() {
+    state.selectionMode = false;
+    state.selectedThemeIds.clear();
+    renderThemes();
+  }
+
+  function toggleThemeSelection(id) {
+    const item = state.themes.find(entry => entry.theme.id === id);
+    if (!state.selectionMode || !item || item.theme.builtIn) return;
+    if (state.selectedThemeIds.has(id)) state.selectedThemeIds.delete(id);
+    else state.selectedThemeIds.add(id);
+    renderThemes();
+  }
+
+  function onThemeListChange(event) {
+    const checkbox = event.target.closest("[data-batch-select]");
+    if (!checkbox) return;
+    const id = checkbox.dataset.batchSelect;
+    if (checkbox.checked) state.selectedThemeIds.add(id);
+    else state.selectedThemeIds.delete(id);
+    checkbox.closest(".theme-item")?.classList.toggle("batch-selected", checkbox.checked);
+    renderSelectionToolbar();
+  }
+
+  function toggleSelectAllCustom() {
+    const visibleIds = $$('[data-batch-select]').map(input => input.dataset.batchSelect).filter(Boolean);
+    if (!visibleIds.length) return;
+    const allSelected = visibleIds.every(id => state.selectedThemeIds.has(id));
+    visibleIds.forEach(id => allSelected ? state.selectedThemeIds.delete(id) : state.selectedThemeIds.add(id));
+    renderThemes();
+  }
+
+  function renderSelectionToolbar() {
+    const toolbar = $("#selection-toolbar");
+    toolbar.hidden = !state.selectionMode;
+    if (!state.selectionMode) return;
+    const validIds = new Set(state.themes.filter(item => !item.theme.builtIn).map(item => item.theme.id));
+    [...state.selectedThemeIds].forEach(id => { if (!validIds.has(id)) state.selectedThemeIds.delete(id); });
+    const selectedCount = state.selectedThemeIds.size;
+    $("#selected-theme-count").textContent = selectedCount;
+    const visibleIds = $$('[data-batch-select]').map(input => input.dataset.batchSelect).filter(Boolean);
+    const allSelected = visibleIds.length > 0 && visibleIds.every(id => state.selectedThemeIds.has(id));
+    const selectAllLabel = $("span", $("#select-all-custom"));
+    selectAllLabel.textContent = allSelected ? "取消全选" : "全选";
+    $("#select-all-custom").disabled = state.busy || visibleIds.length === 0;
+    $("#batch-delete-button").disabled = state.busy || selectedCount === 0;
+    $("#exit-selection-mode").disabled = state.busy;
+  }
+
+  function openBatchDeleteDialog() {
+    if (!state.selectedThemeIds.size) {
+      toast("尚未选择主题", "勾选需要删除的自定义主题后再试。", "info");
+      return;
+    }
+    openDeleteDialog([...state.selectedThemeIds]);
+  }
+
   function showCustomTheme(id) {
     $("#theme-search").value = "";
     activateThemeFilter("custom");
@@ -458,9 +548,15 @@
       toggleThemeSection(sectionToggle.dataset.sectionToggle);
       return;
     }
+    const quickDelete = event.target.closest("[data-quick-delete]");
+    if (quickDelete) {
+      openDeleteDialog([quickDelete.dataset.quickDelete]);
+      return;
+    }
     const select = event.target.closest("[data-select]");
     if (select) {
-      selectTheme(select.dataset.select);
+      if (state.selectionMode) toggleThemeSelection(select.dataset.select);
+      else selectTheme(select.dataset.select);
       return;
     }
     const action = event.target.closest("[data-action]");
@@ -468,7 +564,7 @@
     const id = action.dataset.id;
     if (action.dataset.action === "default") await setDefaultTheme(id);
     if (action.dataset.action === "duplicate") await duplicateTheme(id, action);
-    if (action.dataset.action === "delete") openDeleteDialog(id);
+    if (action.dataset.action === "delete") openDeleteDialog([id]);
   }
 
   function selectTheme(id) {
@@ -885,6 +981,7 @@
         state.draftBadgeUrl = result.url;
       } else {
         state.draft.media.assetPath = result.assetPath;
+        state.draft.media.contentHash = null;
         state.draft.media.kind = /\.(mp4|webm|mov)$/i.test(result.assetPath) ? "video" : "image";
         state.draftMediaUrl = result.url;
       }
@@ -909,6 +1006,7 @@
       state.draftBadgeUrl = null;
     } else {
       state.draft.media.assetPath = null;
+      state.draft.media.contentHash = null;
       state.draft.media.kind = "none";
       state.draftMediaUrl = null;
     }
@@ -1000,42 +1098,69 @@
     } finally { setBusy(false); }
   }
 
-  function openDeleteDialog(id) {
-    const item = state.themes.find(entry => entry.theme.id === id);
-    if (!item || item.theme.builtIn) return;
-    state.deleteId = id;
-    $("#delete-theme-name").textContent = item.theme.name;
+  function openDeleteDialog(ids) {
+    const selected = [...new Set(ids)].map(id => state.themes.find(entry => entry.theme.id === id)).filter(item => item && !item.theme.builtIn);
+    if (!selected.length) return;
+    state.deleteIds = selected.map(item => item.theme.id);
+    const multiple = selected.length > 1;
+    $("#delete-dialog-title").textContent = multiple ? `删除 ${selected.length} 个主题` : "删除主题";
+    $("#delete-dialog-subtitle").textContent = multiple ? "只会删除自定义主题，内置主题不会受影响" : "内置主题不会受影响";
+    $("#delete-theme-message").innerHTML = multiple
+      ? `确定删除选中的 <b>${selected.length}</b> 个自定义主题吗？`
+      : `确定删除“<b>${text(selected[0].theme.name)}</b>”吗？`;
+    $("#delete-form [type=submit] span").textContent = multiple ? `删除 ${selected.length} 个` : "删除";
     $("#delete-dialog").showModal();
+    refreshIcons();
   }
 
   async function deleteTheme(event) {
     event.preventDefault();
     $("#delete-dialog").close();
-    if (!state.deleteId) return;
-    const id = state.deleteId;
-    state.deleteId = null;
-    setBusy(true, "正在删除主题");
+    const ids = state.deleteIds;
+    state.deleteIds = [];
+    if (!ids.length) return;
+    setBusy(true, ids.length > 1 ? `正在删除 ${ids.length} 个主题` : "正在删除主题");
     try {
-      await api("deleteTheme", { id });
-      state.themes = state.themes.filter(item => item.theme.id !== id);
-      if (state.settings.defaultThemeId === id) state.settings.defaultThemeId = "rain-archive";
-      const deletedSelectedTheme = state.selectedId === id;
+      let result;
+      if (ids.length > 1) {
+        result = await api("deleteThemes", { ids });
+      } else {
+        await api("deleteTheme", { id: ids[0] });
+        result = { deletedIds: [ids[0]], failedIds: [] };
+      }
+      const deletedIds = result.deletedIds || [];
+      const failedIds = result.failedIds || [];
+      state.themes = state.themes.filter(item => !deletedIds.includes(item.theme.id));
+      if (result.defaultThemeId) state.settings.defaultThemeId = result.defaultThemeId;
+      else if (deletedIds.includes(state.settings.defaultThemeId)) state.settings.defaultThemeId = "rain-archive";
+      deletedIds.forEach(id => state.selectedThemeIds.delete(id));
+      const deletedSelectedTheme = deletedIds.includes(state.selectedId);
+      const shouldExitSelectionMode = state.selectionMode && (deletedSelectedTheme || !state.themes.some(item => !item.theme.builtIn));
       renderThemes();
-      if (deletedSelectedTheme) {
-        const nextVisibleId = $(".theme-select")?.dataset.select;
-        if (nextVisibleId) {
-          selectTheme(nextVisibleId);
-        } else {
-          $("#theme-search").value = "";
-          activateThemeFilter("all");
+      if (shouldExitSelectionMode) {
+        $("#theme-search").value = "";
+        exitSelectionMode();
+        if (deletedSelectedTheme) {
           const fallback = state.themes.find(item => item.theme.id === state.settings.defaultThemeId) || state.themes[0];
           if (fallback) selectTheme(fallback.theme.id);
         }
+      } else if (deletedSelectedTheme) {
+        $("#theme-search").value = "";
+        activateThemeFilter("all");
+        const fallback = state.themes.find(item => item.theme.id === state.settings.defaultThemeId) || state.themes[0];
+        if (fallback) selectTheme(fallback.theme.id);
       }
-      toast("主题已删除", "主题库已经更新。", "success");
+      if (failedIds.length) {
+        toast("部分主题未删除", `已删除 ${deletedIds.length} 个，${failedIds.length} 个因文件占用或权限问题保留。`, deletedIds.length ? "info" : "error");
+      } else {
+        toast(ids.length > 1 ? `已删除 ${deletedIds.length} 个主题` : "主题已删除", "主题库已经更新。", "success");
+      }
     } catch (error) {
       toast("主题未删除", error.message, "error");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+      if (state.selectionMode) renderSelectionToolbar();
+    }
   }
 
   async function setDefaultTheme(id) {
@@ -1252,8 +1377,9 @@
     }
     $("#busy-overlay").hidden = !busy || !showOverlay;
     $("#busy-label").textContent = label;
-    ["#refresh-button", "#save-copy-button", "#new-theme-button", "#launch-button", "#apply-button", "#wide-apply-button"].forEach(selector => $(selector).disabled = busy);
+    ["#refresh-button", "#save-copy-button", "#new-theme-button", "#launch-button", "#apply-button", "#wide-apply-button", "#custom-manage-button"].forEach(selector => $(selector).disabled = busy);
     $("#status-text").textContent = busy ? label : (state.status.message || "Codex 已就绪");
+    renderSelectionToolbar();
     renderDirtyState();
   }
 

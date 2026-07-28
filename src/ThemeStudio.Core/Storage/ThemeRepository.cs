@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Security.Cryptography;
 using ThemeStudio.Core.Models;
 
 namespace ThemeStudio.Core.Storage;
@@ -14,6 +15,8 @@ public sealed class ThemeRepository
     };
 
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly SemaphoreSlim _mediaHashGate = new(1, 1);
+    private Dictionary<string, (string Id, string Name)>? _mediaHashIndex;
     private readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true,
@@ -116,7 +119,13 @@ public sealed class ThemeRepository
         return await JsonSerializer.DeserializeAsync<ThemeDefinition>(stream, _json, cancellationToken);
     }
 
-    public async Task<ThemeDefinition> SaveAsync(ThemeDefinition theme, CancellationToken cancellationToken = default)
+    public Task<ThemeDefinition> SaveAsync(ThemeDefinition theme, CancellationToken cancellationToken = default) =>
+        SaveCoreAsync(theme, cancellationToken, invalidateMediaHashIndex: true);
+
+    private async Task<ThemeDefinition> SaveCoreAsync(
+        ThemeDefinition theme,
+        CancellationToken cancellationToken,
+        bool invalidateMediaHashIndex)
     {
         ThemeValidator.Validate(theme);
         var existing = await GetAsync(theme.Id, cancellationToken);
@@ -133,6 +142,9 @@ public sealed class ThemeRepository
         {
             _gate.Release();
         }
+
+        if (invalidateMediaHashIndex)
+            _mediaHashIndex = null;
 
         return saved;
     }
@@ -187,23 +199,39 @@ public sealed class ThemeRepository
         CancellationToken cancellationToken = default)
     {
         ThemeValidator.Validate(source);
-        var displayName = string.IsNullOrWhiteSpace(newName) ? $"{source.Name} 自定义" : newName.Trim();
-        var id = await CreateAvailableIdAsync(Slugify(displayName), cancellationToken);
-        var copy = source with
+        var contentHash = Convert.ToHexString(SHA256.HashData(mediaBytes.Span)).ToLowerInvariant();
+        await _mediaHashGate.WaitAsync(cancellationToken);
+        try
         {
-            Id = id,
-            Name = displayName,
-            BuiltIn = false,
-            UpdatedAt = DateTimeOffset.UtcNow,
-            Layers = source.Layers with { Badge = true },
-            Media = source.Media with
+            _mediaHashIndex ??= await BuildMediaHashIndexAsync(cancellationToken);
+            if (_mediaHashIndex.TryGetValue(contentHash, out var existing))
+                throw new InvalidDataException($"这份媒体已经存在于“{existing.Name}”，已跳过重复导入。");
+
+            var displayName = string.IsNullOrWhiteSpace(newName) ? $"{source.Name} 自定义" : newName.Trim();
+            var id = await CreateAvailableIdAsync(Slugify(displayName), cancellationToken);
+            var copy = source with
             {
-                Kind = mediaKind,
-                AssetPath = await ImportAssetBytesAsync(id, mediaBytes, mediaExtension, cancellationToken)
-            },
-            Badge = source.Badge with { AssetPath = ThemeBadge.DefaultAssetPath }
-        };
-        return await SaveAsync(copy, cancellationToken);
+                Id = id,
+                Name = displayName,
+                BuiltIn = false,
+                UpdatedAt = DateTimeOffset.UtcNow,
+                Layers = source.Layers with { Badge = true },
+                Media = source.Media with
+                {
+                    Kind = mediaKind,
+                    ContentHash = contentHash,
+                    AssetPath = await ImportAssetBytesAsync(id, mediaBytes, mediaExtension, cancellationToken)
+                },
+                Badge = source.Badge with { AssetPath = ThemeBadge.DefaultAssetPath }
+            };
+            var saved = await SaveCoreAsync(copy, cancellationToken, invalidateMediaHashIndex: false);
+            _mediaHashIndex[contentHash] = (saved.Id, saved.Name);
+            return saved;
+        }
+        finally
+        {
+            _mediaHashGate.Release();
+        }
     }
 
     public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
@@ -226,6 +254,7 @@ public sealed class ThemeRepository
         {
             _gate.Release();
         }
+        _mediaHashIndex = null;
     }
 
     public async Task<string> ImportAssetAsync(string themeId, string sourcePath, CancellationToken cancellationToken = default)
@@ -309,6 +338,53 @@ public sealed class ThemeRepository
         var source = ResolveAssetPath(relativePath);
         return File.Exists(source) ? await ImportAssetAsync(newThemeId, source, cancellationToken) : null;
     }
+
+    private async Task<Dictionary<string, (string Id, string Name)>> BuildMediaHashIndexAsync(CancellationToken cancellationToken)
+    {
+        var index = new Dictionary<string, (string Id, string Name)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var theme in await GetAllAsync(cancellationToken))
+        {
+            if (theme.Media.Kind is not (MediaKind.Image or MediaKind.Video) || string.IsNullOrWhiteSpace(theme.Media.AssetPath))
+                continue;
+
+            string assetPath;
+            try
+            {
+                assetPath = ResolveAssetPath(theme.Media.AssetPath);
+                if (!File.Exists(assetPath))
+                    continue;
+            }
+            catch (InvalidDataException)
+            {
+                continue;
+            }
+
+            var hash = NormalizeContentHash(theme.Media.ContentHash);
+            if (hash is null)
+            {
+                try
+                {
+                    await using var stream = File.OpenRead(assetPath);
+                    hash = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken)).ToLowerInvariant();
+                }
+                catch (IOException)
+                {
+                    continue;
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    continue;
+                }
+            }
+
+            index.TryAdd(hash, (theme.Id, theme.Name));
+        }
+
+        return index;
+    }
+
+    private static string? NormalizeContentHash(string? value) =>
+        value is { Length: 64 } && value.All(Uri.IsHexDigit) ? value.ToLowerInvariant() : null;
 
     private async Task<string> CreateAvailableIdAsync(string candidate, CancellationToken cancellationToken)
     {
