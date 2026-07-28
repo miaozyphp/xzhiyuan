@@ -83,7 +83,7 @@
       await new Promise(resolve => setTimeout(resolve, 220));
       if (method === "applyTheme" || method === "launchCodex") return { success: true, message: "预览模式：皮肤已准备。", suspendedLayers: [] };
       if (method === "setSafeMode") return { ...state.settings, safeMode: Boolean(params.enabled) };
-      if (method === "checkUpdate") return { state: "available", currentVersion: "0.1.20", latestVersion: "0.1.21", updateAvailable: true, readyToInstall: false, progress: 0, message: "发现新版本 0.1.21", releaseUrl: "https://github.com/miaozyphp/xzhiyuan/releases/tag/v0.1.21" };
+      if (method === "checkUpdate") return { state: "available", currentVersion: "0.1.21", latestVersion: "0.1.22", updateAvailable: true, readyToInstall: false, progress: 0, message: "发现新版本 0.1.22", releaseUrl: "https://github.com/miaozyphp/xzhiyuan/releases/tag/v0.1.22" };
       if (method === "downloadUpdate") return { ...state.update, state: "ready", readyToInstall: true, progress: 100, message: "更新已下载并通过校验" };
       if (method === "installUpdate") return { started: true };
       if (method === "pickMedia" || method === "pickBadge") return { cancelled: true };
@@ -128,7 +128,7 @@
       { ...clone(sample), id: "personal-rain", name: "我的雨夜", builtIn: false, updatedAt: new Date().toISOString() },
       { ...clone(sample), id: "personal-paper", name: "我的晴空", builtIn: false, mode: "standard", media: { ...sample.media, kind: "none" }, updatedAt: new Date().toISOString() }
     ];
-    return { platform: "windows", themes: variants.map(theme => ({ theme, mediaUrl: theme.id === "rain-archive" || theme.id === "personal-rain" ? "../SeedAssets/rain-archive.png" : null, badgeUrl: "assets/x-zhiyuan-emblem.png" })), settings: { defaultThemeId: "rain-archive", brokerEnabled: false, safeMode: false }, status: { state: "codexStopped", message: "Codex 已就绪", codexVersion: "26.721" }, update: { state: "idle", currentVersion: "0.1.20", latestVersion: null, updateAvailable: false, readyToInstall: false, progress: 0, message: "尚未检查更新" } };
+    return { platform: "windows", themes: variants.map(theme => ({ theme, mediaUrl: theme.id === "rain-archive" || theme.id === "personal-rain" ? "../SeedAssets/rain-archive.png" : null, badgeUrl: "assets/x-zhiyuan-emblem.png" })), settings: { defaultThemeId: "rain-archive", brokerEnabled: false, safeMode: false }, status: { state: "codexStopped", message: "Codex 已就绪", codexVersion: "26.721" }, update: { state: "idle", currentVersion: "0.1.21", latestVersion: null, updateAvailable: false, readyToInstall: false, progress: 0, message: "尚未检查更新" } };
   }
 
   async function initialize() {
@@ -386,6 +386,7 @@
 
     $("#theme-count").textContent = state.themes.length;
     const list = $("#theme-list");
+    releaseVideoCovers(list);
     list.replaceChildren();
     if (!visible.length) {
       const empty = document.createElement("div");
@@ -408,7 +409,7 @@
       const thumbMedia = thumbMediaUrl && thumbMediaKind === "image"
         ? `<img src="${attr(thumbMediaUrl)}" alt="">`
         : thumbMediaUrl && thumbMediaKind === "video"
-          ? `<video class="video-cover" src="${attr(thumbMediaUrl)}" muted playsinline preload="metadata" aria-hidden="true"></video><span class="video-cover-mark"><i data-lucide="film"></i></span>`
+          ? `<video class="video-cover" src="${attr(thumbMediaUrl)}" muted playsinline preload="none" aria-hidden="true"></video><span class="video-cover-mark"><i data-lucide="film"></i></span>`
           : "";
       const row = document.createElement("div");
       const batchSelected = state.selectedThemeIds.has(theme.id);
@@ -502,7 +503,7 @@
     if (!state.selectionMode || !item || item.theme.builtIn) return;
     if (state.selectedThemeIds.has(id)) state.selectedThemeIds.delete(id);
     else state.selectedThemeIds.add(id);
-    renderThemes();
+    updateBatchSelectionVisuals();
   }
 
   function onThemeListChange(event) {
@@ -520,7 +521,16 @@
     if (!visibleIds.length) return;
     const allSelected = visibleIds.every(id => state.selectedThemeIds.has(id));
     visibleIds.forEach(id => allSelected ? state.selectedThemeIds.delete(id) : state.selectedThemeIds.add(id));
-    renderThemes();
+    updateBatchSelectionVisuals();
+  }
+
+  function updateBatchSelectionVisuals() {
+    $$('[data-batch-select]').forEach(input => {
+      const selected = state.selectedThemeIds.has(input.dataset.batchSelect);
+      input.checked = selected;
+      input.closest(".theme-item")?.classList.toggle("batch-selected", selected);
+    });
+    renderSelectionToolbar();
   }
 
   function renderSelectionToolbar() {
@@ -618,13 +628,14 @@
     const hint = $("#quick-media-hint");
     const button = $("#quick-media-button");
     if (!preview || !hint || !button) return;
+    releaseVideoCovers(preview);
     const kind = mediaKind(state.draft?.media?.kind);
     const url = state.draftMediaUrl;
     if (url && kind === "image") {
       preview.innerHTML = `<img src="${attr(url)}" alt="">`;
       hint.textContent = "替换当前图片";
     } else if (url && kind === "video") {
-      preview.innerHTML = `<video class="video-cover" src="${attr(url)}" muted playsinline preload="metadata" aria-hidden="true"></video><span class="video-cover-mark"><i data-lucide="film"></i></span>`;
+      preview.innerHTML = `<video class="video-cover" src="${attr(url)}" muted playsinline preload="none" aria-hidden="true"></video><span class="video-cover-mark"><i data-lucide="film"></i></span>`;
       hint.textContent = "替换当前视频";
       initializeVideoCovers(preview);
     } else {
@@ -680,6 +691,7 @@
   function renderInspector() {
     if (!state.draft) return;
     const root = $("#inspector-content");
+    releaseVideoCovers(root);
     if (state.activeInspector === "appearance") root.innerHTML = appearanceTemplate();
     if (state.activeInspector === "components") root.innerHTML = componentsTemplate();
     if (state.activeInspector === "badge") root.innerHTML = badgeTemplate();
@@ -756,7 +768,7 @@
     const preview = hasImage
       ? `<div class="asset-preview"><img src="${attr(state.draftMediaUrl)}" alt=""></div>`
       : hasVideo
-        ? `<div class="asset-preview"><video class="video-cover" src="${attr(state.draftMediaUrl)}" muted playsinline preload="metadata" aria-hidden="true"></video><span class="video-cover-mark"><i data-lucide="film"></i></span></div>`
+        ? `<div class="asset-preview"><video class="video-cover" src="${attr(state.draftMediaUrl)}" muted playsinline preload="none" aria-hidden="true"></video><span class="video-cover-mark"><i data-lucide="film"></i></span></div>`
       : `<div class="asset-preview empty"><i data-lucide="${mediaKind(media.kind) === "video" ? "film" : "image"}"></i></div>`;
     return `
       <section class="config-group">
@@ -945,6 +957,10 @@
       video.removeAttribute("src");
       video.load();
     }
+  }
+
+  function releaseVideoCovers(root) {
+    $$("video.video-cover", root).forEach(releaseVideo);
   }
 
   window.xzhiyuanSetVisible = visible => {
@@ -1539,16 +1555,78 @@
     target[final] = value;
   }
   function initializeVideoCovers(root = document) {
-    $$("video.video-cover", root).forEach(video => {
+    const videos = $$("video.video-cover", root);
+    let cursor = 0;
+
+    const processNext = () => {
+      const video = videos[cursor++];
+      if (!video) return;
+      if (!video.isConnected) {
+        processNext();
+        return;
+      }
+
+      let completed = false;
+      let metadataHandled = false;
+      let timeoutId = 0;
+      const finish = imageUrl => {
+        if (completed) return;
+        completed = true;
+        window.clearTimeout(timeoutId);
+        video.removeEventListener("loadedmetadata", showCoverFrame);
+        video.removeEventListener("seeked", captureCoverFrame);
+        video.removeEventListener("error", handleCoverError);
+        if (imageUrl && video.isConnected) {
+          const image = document.createElement("img");
+          image.className = "video-cover";
+          image.alt = "";
+          image.src = imageUrl;
+          video.replaceWith(image);
+        } else {
+          releaseVideo(video);
+        }
+        window.setTimeout(processNext, 0);
+      };
+      const captureCoverFrame = () => {
+        try {
+          const width = video.videoWidth || 320;
+          const height = video.videoHeight || 180;
+          const scale = Math.min(1, 320 / width);
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(width * scale));
+          canvas.height = Math.max(1, Math.round(height * scale));
+          const context = canvas.getContext("2d", { alpha: false });
+          if (!context) return finish();
+          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+          finish(canvas.toDataURL("image/jpeg", .78));
+        } catch {
+          finish();
+        }
+      };
       const showCoverFrame = () => {
+        if (metadataHandled) return;
+        metadataHandled = true;
         const duration = Number.isFinite(video.duration) ? video.duration : 0;
         const coverTime = duration > .08 ? Math.min(.08, duration / 2) : 0;
-        try { video.currentTime = coverTime; } catch { /* Metadata may still be settling. */ }
+        video.addEventListener("seeked", captureCoverFrame, { once: true });
+        try {
+          video.currentTime = coverTime;
+          if (video.readyState >= 2 && coverTime === 0) captureCoverFrame();
+        } catch {
+          finish();
+        }
       };
-      video.addEventListener("seeked", () => video.pause(), { once: true });
+      const handleCoverError = () => finish();
+
+      video.addEventListener("loadedmetadata", showCoverFrame, { once: true });
+      video.addEventListener("error", handleCoverError, { once: true });
+      timeoutId = window.setTimeout(() => finish(), 5000);
+      video.preload = "metadata";
+      video.load();
       if (video.readyState >= 1) showCoverFrame();
-      else video.addEventListener("loadedmetadata", showCoverFrame, { once: true });
-    });
+    };
+
+    processNext();
   }
   function mediaKind(value) { return String(value || "none").toLowerCase(); }
   function modeName(value) { return String(value).toLowerCase() === "deep" ? "深度模式" : "标准模式"; }

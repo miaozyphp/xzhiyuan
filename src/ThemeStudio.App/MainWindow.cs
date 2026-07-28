@@ -282,7 +282,9 @@ public sealed class MainWindow : Form
     private void OnWebViewProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs eventArgs)
     {
         _log.Error($"WebView2 process failed: {eventArgs.ProcessFailedKind}; reason={eventArgs.Reason}; exit={eventArgs.ExitCode}.");
-        if (eventArgs.ProcessFailedKind is CoreWebView2ProcessFailedKind.RenderProcessExited or CoreWebView2ProcessFailedKind.RenderProcessUnresponsive)
+        if (eventArgs.ProcessFailedKind is CoreWebView2ProcessFailedKind.RenderProcessExited
+            or CoreWebView2ProcessFailedKind.RenderProcessUnresponsive
+            or CoreWebView2ProcessFailedKind.GpuProcessExited)
         {
             try { BeginInvoke(() => _webView.CoreWebView2?.Reload()); }
             catch (InvalidOperationException) { }
